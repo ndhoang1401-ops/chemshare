@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+/*
+ * ─────────────────────────────────────────────────────────────
+ * Design tokens — "Nguyên Tố"
+ * Hướng thiết kế: học thuật, tối giản, lấy cảm hứng từ sổ tay
+ * phòng thí nghiệm và bảng tuần hoàn nguyên tố. KHÔNG dùng nền
+ * kem + accent cam đất, KHÔNG nền gần đen + neon, KHÔNG layout
+ * báo in hairline mặc định — xem NEXTJS_NOTES.md để biết lý do.
+ * ─────────────────────────────────────────────────────────────
+ */
+:root {
+  /* Nền & chữ — sắc lạnh, ngả xanh lá đậm như bảng đen phòng thí nghiệm */
+  --color-paper: #f2f5f3;
+  --color-paper-raised: #ffffff;
+  --color-ink: #16211e;
+  --color-ink-soft: #4a5854;
+  --color-line: #d7ddda;
+
+  /* Accent — lấy cảm hứng từ thử nghiệm ngọn lửa & thuốc thử hóa học */
+  --color-flame: #1d7a6e; /* teal đồng — accent chính, CTA, liên kết đang chọn */
+  --color-flame-strong: #14544c;
+  --color-cobalt: #2f5fa8; /* xanh coban — liên kết, thông tin */
+  --color-amber: #c97a2b; /* cam natri — trạng thái "chờ duyệt" */
+  --color-alert: #b23a48; /* đỏ quỳ tím — lỗi, từ chối */
+  --color-success: #2f7d4f; /* xanh lá — đã duyệt */
+
+  --font-display: "Source Serif 4", ui-serif, Georgia, serif;
+  --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --radius-tile: 0.25rem;
+}
+
+.dark {
+  --color-paper: #101916;
+  --color-paper-raised: #182420;
+  --color-ink: #e7ede9;
+  --color-ink-soft: #a9b6b0;
+  --color-line: #2a3733;
+
+  --color-flame: #3fb3a4;
+  --color-flame-strong: #6fd0c3;
+  --color-cobalt: #7fa4e0;
+  --color-amber: #e0a055;
+  --color-alert: #e17681;
+  --color-success: #5cbd85;
+}
+
+@theme inline {
+  --color-paper: var(--color-paper);
+  --color-paper-raised: var(--color-paper-raised);
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-line: var(--color-line);
+  --color-flame: var(--color-flame);
+  --color-flame-strong: var(--color-flame-strong);
+  --color-cobalt: var(--color-cobalt);
+  --color-amber: var(--color-amber);
+  --color-alert: var(--color-alert);
+  --color-success: var(--color-success);
+
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+
+  --radius-tile: var(--radius-tile);
+}
+
+* {
+  border-color: var(--color-line);
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+::selection {
+  background: var(--color-flame);
+  color: var(--color-paper-raised);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,93 @@
+# Ghi chú kỹ thuật — Next.js 16
+
+Dự án dùng **Next.js 16.2.10**, có một số breaking change so với các bản
+trước mà mọi giai đoạn sau cần tuân thủ. Ghi lại ở đây để không bị quên khi
+viết code ở các giai đoạn tiếp theo.
+
+## 1. `middleware.ts` → `proxy.ts`
+
+Next.js 16 đổi tên quy ước file `middleware` thành `proxy` để làm rõ vai trò
+biên mạng/định tuyến.
+
+- File phải đặt tên `proxy.ts` (không phải `middleware.ts`)
+- Hàm export phải tên `proxy` (không phải `middleware`)
+- Runtime của `proxy` luôn là `nodejs`, **không hỗ trợ Edge runtime**
+
+```ts
+// src/proxy.ts
+export function proxy(request: Request) {
+  /* ... */
+}
+```
+
+→ Áp dụng ở **Giai đoạn 2** khi viết middleware phân quyền theo role.
+
+## 2. API bất đồng bộ (Async Request APIs)
+
+Từ Next.js 16, các API sau **bắt buộc phải `await`**, không còn hỗ trợ truy
+cập đồng bộ:
+
+- `cookies()`, `headers()`, `draftMode()`
+- `params` trong `layout.tsx`, `page.tsx`, `route.ts`
+- `searchParams` trong `page.tsx`
+
+```tsx
+// page.tsx
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  // ...
+}
+```
+
+```ts
+// route.ts
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  // ...
+}
+```
+
+→ Áp dụng ở **Giai đoạn 4** (`app/api/**/route.ts`), **Giai đoạn 7**
+(`documents/[slug]/page.tsx`), và mọi route động khác.
+
+## 3. `next lint` đã bị loại bỏ
+
+Dùng ESLint CLI trực tiếp (`eslint .`), không dùng `next lint` nữa. Project
+đã cấu hình sẵn `npm run lint` → `eslint`.
+
+## 4. `revalidateTag` cần tham số `cacheLife`
+
+```ts
+// Trước: revalidateTag('documents')
+revalidateTag("documents", "max");
+```
+
+→ Áp dụng khi cần revalidate cache ở **Giai đoạn 5** (sau khi duyệt tài
+liệu) và **Giai đoạn 8** (sau khi tải xuống, cập nhật lượt tải).
+
+## 5. Ảnh cục bộ có query string
+
+Nếu dùng query string cho ảnh local qua `next/image` (ví dụ cache-busting
+avatar), phải khai báo `images.localPatterns` trong `next.config.ts`.
+
+→ Lưu ý khi làm avatar ở **Giai đoạn 3**.
+
+## 6. Font
+
+Dự án **không dùng `next/font/google`** (môi trường build có thể không truy
+cập được `fonts.googleapis.com`). Thay vào đó dùng font tự lưu trữ qua các
+gói `@fontsource/*`, import trực tiếp file CSS trong `layout.tsx`. Khi cần
+thêm weight/subset mới, kiểm tra file có sẵn trong
+`node_modules/@fontsource/<font>/` rồi import đúng file đó.
+
+## 7. Node.js tối thiểu
+
+Next.js 16 yêu cầu **Node.js ≥ 20.9.0**. README triển khai (Giai đoạn 13)
+cần ghi rõ yêu cầu này.
