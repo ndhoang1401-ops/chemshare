@@ -91,3 +91,34 @@ thêm weight/subset mới, kiểm tra file có sẵn trong
 
 Next.js 16 yêu cầu **Node.js ≥ 20.9.0**. README triển khai (Giai đoạn 13)
 cần ghi rõ yêu cầu này.
+
+## 8. Auth.js v5 + `session: { strategy: "jwt" }` — quirk TypeScript
+
+Khi cấu hình `session: { strategy: "jwt" }` cùng lúc với việc mở rộng type
+`Session`/`JWT` qua module augmentation (`declare module "next-auth/jwt"`),
+TypeScript suy luận SAI kiểu tham số `token` trong callback `callbacks.session`
+thành `unknown` thay vì `JWT` đã augment (dù callback `jwt` không bị ảnh
+hưởng). Đây là hạn chế của TypeScript khi hợp nhất intersection type + suy
+luận ngữ cảnh (contextual inference), không phải lỗi cấu hình.
+
+**Cách khắc phục:** khai type tường minh cho tham số thay vì để TS tự suy
+luận:
+
+```ts
+// Sai — token bị suy luận thành unknown khi có session.strategy: "jwt"
+session({ session, token }) { ... }
+
+// Đúng
+session({ session, token }: { session: Session; token: JWT }) { ... }
+```
+
+Xem `src/auth.config.ts` để có ví dụ đầy đủ. Nếu thêm callback mới có dùng
+`token`/`session`, áp dụng cùng cách khai type tường minh này.
+
+## 9. Prisma CLI cần mạng ngoài tới `binaries.prisma.sh`
+
+`prisma generate`, `migrate`, `format`, `validate` đều cần tải engine
+binary từ `binaries.prisma.sh` trong lần chạy đầu (hoặc khi đổi phiên bản
+Prisma). Nếu máy/CI của bạn chặn domain này, các lệnh trên sẽ báo lỗi 403.
+Chạy ở máy có mạng ngoài bình thường, hoặc mở domain này trong cấu hình
+mạng/firewall nếu dùng CI riêng.

@@ -22,7 +22,7 @@ người tự học. Tài liệu chỉ công khai sau khi được kiểm duyệ
 
 ## Bắt đầu (môi trường phát triển)
 
-Yêu cầu: Node.js ≥ 20.9, npm, Docker (để chạy PostgreSQL local).
+Yêu cầu: Node.js ≥ 20.9, npm.
 
 ```bash
 # 1. Cài dependency
@@ -30,20 +30,62 @@ npm install
 
 # 2. Sao chép biến môi trường
 cp .env.example .env
-# → mở .env và điền giá trị (DATABASE_URL mặc định đã khớp sẵn với
-#   docker-compose.dev.yml bên dưới, các biến khác sẽ cần từ Giai đoạn 2 trở đi)
+```
 
-# 3. Chạy PostgreSQL local
+Mở `.env` và:
+
+- Tạo `AUTH_SECRET`: chạy `openssl rand -base64 32` rồi dán vào
+- `DATABASE_URL` cần trỏ tới một PostgreSQL thật — chọn **1 trong 2 cách**:
+
+**Cách A — Docker (khuyến nghị nếu máy bạn chạy Docker được):**
+
+```bash
 docker compose -f docker-compose.dev.yml up -d
+```
 
-# 4. Chạy server phát triển
+`DATABASE_URL` mặc định trong `.env.example` đã khớp sẵn với compose file
+này, không cần sửa gì thêm.
+
+**Cách B — Không cần Docker (Postgres miễn phí trên mây):** nếu Docker
+không chạy được trên máy bạn, tạo một database miễn phí ở
+[Neon](https://neon.tech) hoặc [Supabase](https://supabase.com) (vài phút,
+không cần cài gì), rồi dán connection string họ cung cấp vào
+`DATABASE_URL` trong `.env`.
+
+```bash
+# 3. Sinh Prisma Client + tạo bảng trong database
+npx prisma generate
+npx prisma migrate dev --name init
+
+# 4. Seed dữ liệu mẫu (danh mục Hóa học + 3 tài khoản demo + 2 tài liệu mẫu)
+npx prisma db seed
+
+# 5. Chạy server phát triển
 npm run dev
 ```
 
 Mở http://localhost:3000.
 
-> Lệnh `npx prisma migrate dev` và `npx prisma db seed` sẽ được bổ sung vào
-> quy trình này ở **Giai đoạn 1 — Database & Prisma**.
+> ⚠️ Bước 3 cần kết nối mạng ngoài tới `binaries.prisma.sh` để tải engine
+> (chỉ lần đầu, hoặc khi đổi phiên bản Prisma) — xem `NEXTJS_NOTES.md`
+> mục 9 nếu gặp lỗi 403.
+
+### Tài khoản demo sau khi seed
+
+Mật khẩu chung: `MatKhau123!`
+
+| Vai trò    | Email                     |
+| ---------- | -------------------------- |
+| Admin      | admin@nguyento.dev          |
+| Moderator  | kiemduyet@nguyento.dev       |
+| User       | thanhvien@nguyento.dev        |
+
+### Chưa cấu hình SMTP?
+
+Không sao — khi chưa điền `EMAIL_SERVER_HOST` thật trong `.env`, email xác
+thực/đặt lại mật khẩu sẽ được **in thẳng ra terminal** đang chạy
+`npm run dev` (kèm link để bấm), không cần SMTP thật để test luồng đăng
+ký/quên mật khẩu.
 
 ## Script
 
@@ -54,11 +96,16 @@ npm run start            # chạy bản build production
 npm run lint              # kiểm tra ESLint
 npm run format             # format code bằng Prettier
 npm run format:check        # kiểm tra format mà không sửa
+npm run db:generate          # sinh Prisma Client sau khi đổi schema
+npm run db:migrate            # tạo + áp dụng migration mới (dev)
+npm run db:seed                # chạy lại seed dữ liệu mẫu
+npm run db:studio                # mở Prisma Studio (xem/sửa dữ liệu qua UI)
 ```
 
 ## Cấu trúc thư mục
 
 ```
+prisma/           # schema.prisma, migrations, seed.ts (ở gốc dự án — quy ước của Prisma CLI)
 src/
   app/
     (public)/     # Trang chủ, tìm kiếm, chi tiết tài liệu, tiện ích Hóa học
@@ -71,7 +118,9 @@ src/
   server/         # Lớp service & repository (business logic tách khỏi route handler)
   types/          # Định nghĩa TypeScript dùng chung
   hooks/          # React hooks dùng chung
-  prisma/         # schema.prisma, migrations, seed
+  auth.ts         # Cấu hình Auth.js đầy đủ (Credentials provider)
+  auth.config.ts  # Phần cấu hình Auth.js không đụng Prisma (callback phân quyền)
+  proxy.ts        # Middleware phân quyền theo route (quy ước Next.js 16)
 ```
 
 Mỗi thư mục còn trống hiện có một `README.md` ghi rõ giai đoạn nào sẽ lấp

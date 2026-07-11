@@ -7,7 +7,7 @@
  * `tile` mô phỏng ký hiệu ô nguyên tố trong bảng tuần hoàn — dùng cho
  * mô-típ thiết kế signature của toàn bộ giao diện.
  */
-export type CategoryGroup = "grade" | "field" | "resource";
+export type CategoryGroup = "GRADE" | "FIELD" | "RESOURCE";
 
 export interface CategoryDefinition {
   slug: string;
@@ -18,45 +18,45 @@ export interface CategoryDefinition {
 }
 
 export const CATEGORIES: CategoryDefinition[] = [
-  { slug: "hoa-8", name: "Hóa 8", tile: "H8", group: "grade" },
-  { slug: "hoa-9", name: "Hóa 9", tile: "H9", group: "grade" },
-  { slug: "hoa-10", name: "Hóa 10", tile: "H10", group: "grade" },
-  { slug: "hoa-11", name: "Hóa 11", tile: "H11", group: "grade" },
-  { slug: "hoa-12", name: "Hóa 12", tile: "H12", group: "grade" },
-  { slug: "hoa-dai-cuong", name: "Hóa đại cương", tile: "Đc", group: "field" },
-  { slug: "hoa-huu-co", name: "Hóa hữu cơ", tile: "Hc", group: "field" },
-  { slug: "hoa-vo-co", name: "Hóa vô cơ", tile: "Vc", group: "field" },
-  { slug: "hoa-phan-tich", name: "Hóa phân tích", tile: "Pt", group: "field" },
-  { slug: "hoa-ly", name: "Hóa lý", tile: "Hl", group: "field" },
-  { slug: "hoa-sinh", name: "Hóa sinh", tile: "Hs", group: "field" },
-  { slug: "de-thi", name: "Đề thi", tile: "Đt", group: "resource" },
+  { slug: "hoa-8", name: "Hóa 8", tile: "H8", group: "GRADE" },
+  { slug: "hoa-9", name: "Hóa 9", tile: "H9", group: "GRADE" },
+  { slug: "hoa-10", name: "Hóa 10", tile: "H10", group: "GRADE" },
+  { slug: "hoa-11", name: "Hóa 11", tile: "H11", group: "GRADE" },
+  { slug: "hoa-12", name: "Hóa 12", tile: "H12", group: "GRADE" },
+  { slug: "hoa-dai-cuong", name: "Hóa đại cương", tile: "Đc", group: "FIELD" },
+  { slug: "hoa-huu-co", name: "Hóa hữu cơ", tile: "Hc", group: "FIELD" },
+  { slug: "hoa-vo-co", name: "Hóa vô cơ", tile: "Vc", group: "FIELD" },
+  { slug: "hoa-phan-tich", name: "Hóa phân tích", tile: "Pt", group: "FIELD" },
+  { slug: "hoa-ly", name: "Hóa lý", tile: "Hl", group: "FIELD" },
+  { slug: "hoa-sinh", name: "Hóa sinh", tile: "Hs", group: "FIELD" },
+  { slug: "de-thi", name: "Đề thi", tile: "Đt", group: "RESOURCE" },
   {
     slug: "chuyen-de-olympic",
     name: "Chuyên đề Olympic",
     tile: "Ol",
-    group: "resource",
+    group: "RESOURCE",
   },
   {
     slug: "tai-lieu-giao-vien",
     name: "Tài liệu giáo viên",
     tile: "Gv",
-    group: "resource",
+    group: "RESOURCE",
   },
 ];
 
 export const DOCUMENT_STATUSES = {
-  PENDING: "pending",
-  APPROVED: "approved",
-  REJECTED: "rejected",
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
 } as const;
 
 export type DocumentStatus =
   (typeof DOCUMENT_STATUSES)[keyof typeof DOCUMENT_STATUSES];
 
 export const USER_ROLES = {
-  USER: "user",
-  MODERATOR: "moderator",
-  ADMIN: "admin",
+  USER: "USER",
+  MODERATOR: "MODERATOR",
+  ADMIN: "ADMIN",
 } as const;
 
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES];

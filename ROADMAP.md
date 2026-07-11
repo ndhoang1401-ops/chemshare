@@ -24,25 +24,55 @@ code đã có ở giai đoạn trước (không viết lại từ đầu).
 - [x] `docker-compose.dev.yml` — PostgreSQL + Adminer cho môi trường phát triển
 - [x] Build production (`next build`) và `eslint .` chạy sạch, không lỗi
 
-## ⬜ Giai đoạn 1 — Database & Prisma
+## ✅ Giai đoạn 1 — Database & Prisma (hoàn tất)
 
-- Viết `prisma/schema.prisma` đầy đủ (Users, Documents, Categories, Reviews,
-  Downloads, Notifications) đúng theo schema tối thiểu trong yêu cầu gốc
-- Migration đầu tiên
-- `prisma/seed.ts`: seed danh mục từ `CATEGORIES` trong `lib/constants.ts`,
-  vài user mẫu (mỗi role), vài tài liệu mẫu
+- [x] `prisma/schema.prisma` đầy đủ: User, Category, Document, Review,
+      Download, Notification, VerificationToken (token xác thực email/đặt
+      lại mật khẩu — tự viết, không dùng adapter mặc định của Auth.js),
+      ActivityLog (chuẩn bị cho nhật ký hoạt động ở Giai đoạn 9)
+- [x] Cột DB dùng snake_case qua `@map`/`@@map`, khớp đúng schema tối thiểu
+      trong yêu cầu gốc; field Prisma dùng camelCase
+- [x] `grade` tách riêng khỏi `category` (lớp học là chiều lọc độc lập,
+      không gộp cứng vào 14 danh mục — khớp yêu cầu "Tìm theo lớp" riêng ở
+      Giai đoạn 6)
+- [x] `prisma/seed.ts`: seed 14 danh mục từ `lib/constants.ts`, 3 tài khoản
+      demo (mỗi vai trò), 2 tài liệu mẫu (1 approved, 1 pending)
+- [x] `lib/prisma.ts` — Prisma Client singleton (an toàn với hot-reload dev)
 
-## ⬜ Giai đoạn 2 — Xác thực (Auth)
+> ⚠️ Sandbox dùng để phát triển không có quyền truy cập
+> `binaries.prisma.sh` nên **chưa thể chạy** `prisma generate` /
+> `migrate dev` tại đây. Đã viết schema cẩn thận bằng tay; bạn cần chạy
+> các lệnh này ở máy mình (xem README mục "Bắt đầu"). Nếu gặp lỗi khi
+> chạy, gửi lại để mình sửa tiếp.
 
-- Auth.js: đăng ký, đăng nhập, xác thực email, quên/đổi mật khẩu
-- Hash mật khẩu bằng Argon2
-- Middleware phân quyền theo role — **lưu ý: dùng file `proxy.ts`, không
-  phải `middleware.ts`** (xem `NEXTJS_NOTES.md`)
+## ✅ Giai đoạn 2 — Xác thực (Auth) (hoàn tất)
+
+- [x] Auth.js v5 (`next-auth@beta`), Credentials provider, session JWT
+- [x] Đăng ký (`/register`) → gửi email xác thực → `/verify-email?token=`
+- [x] Đăng nhập (`/login`) — chặn nếu email chưa xác thực
+- [x] Quên mật khẩu (`/forgot-password`) → email → `/reset-password?token=`
+      — phản hồi giống nhau dù email có tồn tại hay không (chống dò email)
+- [x] Hash mật khẩu bằng Argon2id (`@node-rs/argon2`)
+- [x] `src/proxy.ts` (đúng quy ước Next.js 16, không phải `middleware.ts`)
+      bảo vệ `/profile`, `/upload`, `/my-documents`, `/notifications`
+      (yêu cầu đăng nhập) và `/admin/**` (yêu cầu Moderator/Admin)
+- [x] `lib/email.ts` — gửi qua SMTP (nodemailer); nếu chưa cấu hình SMTP,
+      tự động in nội dung email ra console (tiện test local không cần
+      SMTP thật)
+- [x] Trang chủ hiển thị trạng thái đăng nhập (tên, vai trò, nút đăng xuất)
+      để kiểm tra nhanh toàn bộ luồng
+
+**Đã lùi lại có chủ đích:** "Đổi mật khẩu" (khi đã đăng nhập, khác với
+luồng quên mật khẩu) sẽ làm ở **Giai đoạn 3** cùng trang hồ sơ, vì đó là
+thao tác thuộc quản lý tài khoản hơn là xác thực.
+
+
 
 ## ⬜ Giai đoạn 3 — Hồ sơ người dùng
 
 - Trang `/profile`: avatar, tên hiển thị, giới thiệu, danh sách tài liệu đã
   đăng, thống kê lượt tải
+- Đổi mật khẩu (khi đã đăng nhập — khác luồng "quên mật khẩu" ở Giai đoạn 2)
 
 ## ⬜ Giai đoạn 4 — Upload tài liệu
 

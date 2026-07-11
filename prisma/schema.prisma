@@ -1,0 +1,231 @@
+// Schema cơ sở dữ liệu — Nguyên Tố
+// Quy ước: field trong Prisma dùng camelCase, cột DB dùng snake_case qua
+// @map/@@map để khớp với "Database schema tối thiểu" trong yêu cầu gốc.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────
+
+/// Vai trò người dùng — Khách (chưa đăng nhập, không lưu DB), Thành viên,
+/// Kiểm duyệt viên, Quản trị viên.
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+
+  @@map("role")
+}
+
+/// Trạng thái phê duyệt của một tài liệu.
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("document_status")
+}
+
+/// Quyết định của kiểm duyệt viên cho một lượt xét duyệt.
+enum ReviewStatus {
+  APPROVED
+  REJECTED
+
+  @@map("review_status")
+}
+
+/// Nhóm chuyên mục — dùng để sắp xếp hiển thị (theo lớp / theo lĩnh vực /
+/// theo loại tài liệu) mà không đổi cấu trúc danh phẳng của Categories.
+enum CategoryGroup {
+  GRADE
+  FIELD
+  RESOURCE
+
+  @@map("category_group")
+}
+
+/// Lớp học — độc lập với Category để có thể lọc tài liệu theo lớp dù tài
+/// liệu thuộc chuyên đề nào (vd. "Đề thi" lớp 10, "Hóa hữu cơ" lớp 11).
+enum Grade {
+  GRADE_8
+  GRADE_9
+  GRADE_10
+  GRADE_11
+  GRADE_12
+
+  @@map("grade")
+}
+
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+
+  @@map("token_type")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────────────────────
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String    @map("password_hash")
+  displayName     String    @map("display_name")
+  avatar          String?
+  bio             String?
+  role            Role      @default(USER)
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  documents           Document[]           @relation("UploadedDocuments")
+  reviews             Review[]             @relation("ModeratorReviews")
+  downloads           Download[]
+  notifications       Notification[]
+  verificationTokens  VerificationToken[]
+  activityLogs        ActivityLog[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model Category {
+  id    String        @id @default(cuid())
+  name  String
+  slug  String        @unique
+  /// Ký hiệu ngắn hiển thị dạng "ô nguyên tố" trên giao diện (vd. "H10", "Hc")
+  tile  String
+  group CategoryGroup
+
+  documents Document[]
+
+  @@map("categories")
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  /// Định danh dùng cho URL /documents/[slug], sinh từ title + hậu tố ngẫu nhiên
+  slug        String   @unique
+  title       String
+  description String?  @db.Text
+  keywords    String[] @default([])
+  /// Tác giả gốc của tài liệu (có thể khác người đăng tải)
+  author      String?
+  grade       Grade?
+
+  categoryId String   @map("category_id")
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  uploaderId String @map("uploader_id")
+  uploader   User   @relation("UploadedDocuments", fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  fileUrl    String @map("file_url")
+  fileName   String @map("file_name")
+  fileType   String @map("file_type")
+  /// Dung lượng file tính theo byte
+  fileSize   Int    @map("file_size")
+  previewUrl String? @map("preview_url")
+
+  status         DocumentStatus @default(PENDING)
+  downloadCount  Int            @default(0) @map("download_count")
+  viewCount      Int            @default(0) @map("view_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  reviews   Review[]
+  downloads Download[]
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([uploaderId])
+  @@index([grade])
+  @@index([createdAt])
+  @@map("documents")
+}
+
+model Review {
+  id          String       @id @default(cuid())
+  documentId  String       @map("document_id")
+  document    Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  moderatorId String       @map("moderator_id")
+  moderator   User         @relation("ModeratorReviews", fields: [moderatorId], references: [id], onDelete: Cascade)
+  status      ReviewStatus
+  /// Lý do từ chối (bắt buộc khi status = REJECTED, kiểm tra ở tầng ứng dụng)
+  note        String?      @db.Text
+  reviewedAt  DateTime     @default(now()) @map("reviewed_at")
+
+  @@index([documentId])
+  @@index([moderatorId])
+  @@map("reviews")
+}
+
+model Download {
+  id           String   @id @default(cuid())
+  documentId   String   @map("document_id")
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  downloadedAt DateTime @default(now()) @map("downloaded_at")
+
+  @@index([documentId])
+  @@index([userId])
+  @@map("downloads")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  content   String   @db.Text
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+/// Token dùng chung cho xác thực email và đặt lại mật khẩu (Giai đoạn 2).
+/// Không dùng bảng VerificationToken mặc định của Auth.js vì luồng
+/// email/password ở đây được tự viết thủ công thay vì qua Adapter.
+model VerificationToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  type      TokenType
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, type])
+  @@map("verification_tokens")
+}
+
+/// Nhật ký hoạt động cho trang quản trị (Giai đoạn 9) — ví dụ duyệt/từ chối
+/// tài liệu, đổi vai trò người dùng.
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?  @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Ví dụ: "document.approve", "document.reject", "user.role_change"
+  action     String
+  targetType String?  @map("target_type")
+  targetId   String?  @map("target_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("activity_logs")
+}

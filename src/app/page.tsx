@@ -1,9 +1,19 @@
+import { auth } from "@/auth";
 import { CATEGORIES, SITE_NAME, SITE_TAGLINE } from "@/lib/constants";
+import { LogoutButton } from "@/components/auth/logout-button";
+import { buttonVariants } from "@/components/ui/button";
+import Link from "next/link";
+
+const ROLE_LABELS: Record<string, string> = {
+  USER: "Thành viên",
+  MODERATOR: "Kiểm duyệt viên",
+  ADMIN: "Quản trị viên",
+};
 
 const ROADMAP = [
   { stage: 0, title: "Khởi tạo dự án", done: true },
-  { stage: 1, title: "Database & Prisma", done: false },
-  { stage: 2, title: "Xác thực (Auth)", done: false },
+  { stage: 1, title: "Database & Prisma", done: true },
+  { stage: 2, title: "Xác thực (Auth)", done: true },
   { stage: 3, title: "Hồ sơ người dùng", done: false },
   { stage: 4, title: "Upload tài liệu", done: false },
   { stage: 5, title: "Quy trình phê duyệt", done: false },
@@ -17,7 +27,9 @@ const ROADMAP = [
   { stage: 13, title: "Đóng gói & triển khai", done: false },
 ] as const;
 
-export default function Home() {
+export default async function Home() {
+  const session = await auth();
+
   return (
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6">
       <header className="flex items-center justify-between py-8">
@@ -37,9 +49,31 @@ export default function Home() {
             <p className="text-ink-soft text-sm">{SITE_TAGLINE}</p>
           </div>
         </div>
-        <p className="text-ink-soft hidden font-mono text-xs sm:block">
-          v0.1.0 · đang xây dựng
-        </p>
+
+        {session?.user ? (
+          <div className="flex items-center gap-3">
+            <p className="hidden text-right text-sm sm:block">
+              <span className="text-ink">{session.user.name}</span>
+              <span className="text-ink-soft">
+                {" "}
+                · {ROLE_LABELS[session.user.role] ?? session.user.role}
+              </span>
+            </p>
+            <LogoutButton />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+            >
+              Đăng nhập
+            </Link>
+            <Link href="/register" className={buttonVariants({ size: "sm" })}>
+              Đăng ký
+            </Link>
+          </div>
+        )}
       </header>
 
       <main className="flex-1">
@@ -54,9 +88,9 @@ export default function Home() {
               khai, đảm bảo chất lượt nội dung cho cộng đồng học Hóa.
             </p>
             <p className="border-flame text-ink-soft mt-8 border-l-2 pl-4 font-mono text-xs leading-relaxed">
-              Trang này đang ở giai đoạn khởi tạo (Giai đoạn 0). Tìm kiếm, đăng
-              nhập và đăng tải tài liệu sẽ lần lượt xuất hiện ở các giai đoạn
-              tiếp theo — xem tiến độ bên dưới.
+              Đăng ký/đăng nhập đã hoạt động (Giai đoạn 2). Upload, duyệt bài và
+              trang chủ đầy đủ sẽ lần lượt xuất hiện ở các giai đoạn tiếp theo —
+              xem tiến độ bên dưới.
             </p>
           </div>
 
