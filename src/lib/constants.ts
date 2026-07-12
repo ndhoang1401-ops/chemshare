@@ -61,6 +61,20 @@ export const USER_ROLES = {
 
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES];
 
+export const ROLE_LABELS: Record<UserRole, string> = {
+  USER: "Thành viên",
+  MODERATOR: "Kiểm duyệt viên",
+  ADMIN: "Quản trị viên",
+};
+
+export const GRADE_LABELS: Record<string, string> = {
+  GRADE_8: "Lớp 8",
+  GRADE_9: "Lớp 9",
+  GRADE_10: "Lớp 10",
+  GRADE_11: "Lớp 11",
+  GRADE_12: "Lớp 12",
+};
+
 export const ACCEPTED_DOCUMENT_TYPES = [
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

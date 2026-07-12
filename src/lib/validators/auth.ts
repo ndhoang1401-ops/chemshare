@@ -6,14 +6,14 @@ const email = z
   .toLowerCase()
   .pipe(z.email("Email không hợp lệ"));
 
-const password = z
+export const password = z
   .string({ error: "Vui lòng nhập mật khẩu" })
   .min(8, "Mật khẩu phải có ít nhất 8 ký tự")
   .max(72, "Mật khẩu tối đa 72 ký tự")
   .regex(/[a-zA-Z]/, "Mật khẩu phải chứa ít nhất một chữ cái")
   .regex(/[0-9]/, "Mật khẩu phải chứa ít nhất một chữ số");
 
-const displayName = z
+export const displayName = z
   .string({ error: "Vui lòng nhập tên hiển thị" })
   .trim()
   .min(2, "Tên hiển thị phải có ít nhất 2 ký tự")

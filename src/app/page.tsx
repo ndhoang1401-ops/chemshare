@@ -1,20 +1,19 @@
 import { auth } from "@/auth";
-import { CATEGORIES, SITE_NAME, SITE_TAGLINE } from "@/lib/constants";
+import {
+  CATEGORIES,
+  ROLE_LABELS,
+  SITE_NAME,
+  SITE_TAGLINE,
+} from "@/lib/constants";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { buttonVariants } from "@/components/ui/button";
 import Link from "next/link";
-
-const ROLE_LABELS: Record<string, string> = {
-  USER: "Thành viên",
-  MODERATOR: "Kiểm duyệt viên",
-  ADMIN: "Quản trị viên",
-};
 
 const ROADMAP = [
   { stage: 0, title: "Khởi tạo dự án", done: true },
   { stage: 1, title: "Database & Prisma", done: true },
   { stage: 2, title: "Xác thực (Auth)", done: true },
-  { stage: 3, title: "Hồ sơ người dùng", done: false },
+  { stage: 3, title: "Hồ sơ người dùng", done: true },
   { stage: 4, title: "Upload tài liệu", done: false },
   { stage: 5, title: "Quy trình phê duyệt", done: false },
   { stage: 6, title: "Tìm kiếm", done: false },
@@ -52,13 +51,16 @@ export default async function Home() {
 
         {session?.user ? (
           <div className="flex items-center gap-3">
-            <p className="hidden text-right text-sm sm:block">
+            <Link
+              href="/profile"
+              className="hidden text-right text-sm hover:opacity-80 sm:block"
+            >
               <span className="text-ink">{session.user.name}</span>
               <span className="text-ink-soft">
                 {" "}
                 · {ROLE_LABELS[session.user.role] ?? session.user.role}
               </span>
-            </p>
+            </Link>
             <LogoutButton />
           </div>
         ) : (

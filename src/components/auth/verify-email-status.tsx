@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { FormBanner } from "@/components/ui/form-message";
 
@@ -10,9 +10,12 @@ const TOKEN_ERROR_MESSAGES: Record<string, string> = {
   expired: "Liên kết đã hết hạn. Vui lòng đăng ký lại hoặc liên hệ hỗ trợ.",
 };
 
+const REDIRECT_DELAY_MS = 2500;
+
 type Status = "loading" | "success" | "error";
 
 export function VerifyEmailStatus() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
 
@@ -60,6 +63,16 @@ export function VerifyEmailStatus() {
     };
   }, [token]);
 
+  // Xác thực thành công -> tự động chuyển sang trang đăng nhập sau vài
+  // giây, không bắt người dùng phải bấm link thủ công.
+  useEffect(() => {
+    if (status !== "success") return;
+    const timer = setTimeout(() => {
+      router.push("/login");
+    }, REDIRECT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [status, router]);
+
   if (status === "loading") {
     return (
       <div className="text-center">
@@ -80,13 +93,13 @@ export function VerifyEmailStatus() {
           Xác thực thành công
         </h1>
         <p className="text-ink-soft mt-3 text-sm leading-relaxed">
-          Email của bạn đã được xác thực. Giờ bạn có thể đăng nhập.
+          Email của bạn đã được xác thực. Đang chuyển tới trang đăng nhập...
         </p>
         <Link
           href="/login"
           className="text-flame mt-6 inline-block text-sm hover:underline"
         >
-          Đến trang đăng nhập
+          Đến ngay bây giờ
         </Link>
       </div>
     );

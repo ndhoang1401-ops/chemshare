@@ -73,13 +73,23 @@ code đã có ở giai đoạn trước (không viết lại từ đầu).
 luồng quên mật khẩu) sẽ làm ở **Giai đoạn 3** cùng trang hồ sơ, vì đó là
 thao tác thuộc quản lý tài khoản hơn là xác thực.
 
+## ✅ Giai đoạn 3 — Hồ sơ người dùng (hoàn tất)
+
+- [x] `(dashboard)/layout.tsx` — header dùng chung (brand, avatar, tên,
+      nút đăng xuất) cho các trang cần đăng nhập
+- [x] Trang `/profile`: avatar (URL tự nhập, fallback chữ cái đầu tên khi
+      chưa có ảnh), tên hiển thị, vai trò, giới thiệu ngắn
+- [x] Thống kê: số tài liệu đã đăng, tổng lượt xem, tổng lượt tải
+- [x] Danh sách tài liệu đã đăng kèm trạng thái duyệt
+      (`components/documents/document-status-badge.tsx` — dùng lại được ở
+      Giai đoạn 5/7/9)
+- [x] Form chỉnh sửa hồ sơ (`PATCH /api/profile`)
+- [x] Đổi mật khẩu khi đã đăng nhập (`POST /api/profile/change-password`)
+      — yêu cầu đúng mật khẩu hiện tại, mật khẩu mới phải khác mật khẩu cũ
+- [x] `components/ui/avatar.tsx`, `components/ui/textarea.tsx` — bổ sung
+      vào bộ UI dùng chung
 
 
-## ⬜ Giai đoạn 3 — Hồ sơ người dùng
-
-- Trang `/profile`: avatar, tên hiển thị, giới thiệu, danh sách tài liệu đã
-  đăng, thống kê lượt tải
-- Đổi mật khẩu (khi đã đăng nhập — khác luồng "quên mật khẩu" ở Giai đoạn 2)
 
 ## ⬜ Giai đoạn 4 — Upload tài liệu
 
