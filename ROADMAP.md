@@ -45,6 +45,13 @@ code đã có ở giai đoạn trước (không viết lại từ đầu).
 > các lệnh này ở máy mình (xem README mục "Bắt đầu"). Nếu gặp lỗi khi
 > chạy, gửi lại để mình sửa tiếp.
 
+> 🔧 **Cập nhật:** Prisma 7 đổi kiến trúc (bỏ `url` trong schema, bắt buộc
+> `prisma.config.ts` + driver adapter cho `PrismaClient`) — đã sửa toàn bộ
+> (`prisma.config.ts` mới, `lib/prisma.ts` dùng `@prisma/adapter-pg`,
+> `next.config.ts` thêm cấu hình tương thích Turbopack). Chi tiết ở
+> `NEXTJS_NOTES.md` mục 10. Cũng đã sửa `proxy.ts` (export default không
+> đúng cú pháp khiến Next.js không nhận diện được).
+
 ## ✅ Giai đoạn 2 — Xác thực (Auth) (hoàn tất)
 
 - [x] Auth.js v5 (`next-auth@beta`), Credentials provider, session JWT

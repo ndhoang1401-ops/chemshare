@@ -122,3 +122,29 @@ binary từ `binaries.prisma.sh` trong lần chạy đầu (hoặc khi đổi ph
 Prisma). Nếu máy/CI của bạn chặn domain này, các lệnh trên sẽ báo lỗi 403.
 Chạy ở máy có mạng ngoài bình thường, hoặc mở domain này trong cấu hình
 mạng/firewall nếu dùng CI riêng.
+
+## 10. Prisma 7 — breaking change lớn (bắt buộc đọc trước khi đụng Prisma)
+
+Dự án dùng **Prisma 7.8.0**, phiên bản này đổi kiến trúc so với Prisma 5/6:
+
+- **Không còn khai `url` trong `datasource` của `schema.prisma`.** Connection
+  string giờ nằm trong **`prisma.config.ts`** ở gốc dự án (file mới, đọc
+  bằng `defineConfig`/`env` từ package `prisma/config`).
+- **`PrismaClient` bắt buộc phải nhận `adapter`.** Không còn engine kết nối
+  nội bộ, không có fallback — `new PrismaClient()` không tham số sẽ throw.
+  `src/lib/prisma.ts` tạo `pg.Pool` rồi bọc qua `@prisma/adapter-pg`.
+- **Seed command cấu hình trong `prisma.config.ts`** (`migrations.seed`),
+  **không phải** field `"prisma"` trong `package.json` nữa (field đó bị
+  Prisma 7 lờ đi hoàn toàn, không báo lỗi, chỉ âm thầm không chạy).
+- **Generator giữ nguyên `prisma-client-js`** (không đổi sang
+  `prisma-client` như docs migrate chính thức gợi ý) và **không khai
+  `output`** — vì Next.js 16 mặc định dùng Turbopack, và provider mới gây
+  lỗi `Cannot find module '.prisma/client/default'` với Turbopack.
+  `next.config.ts` có thêm `serverExternalPackages` +
+  `turbopack.resolveAlias` để phòng lỗi này.
+- `prisma.config.ts` cần `import "dotenv/config"` ở đầu file — Prisma 7 CLI
+  không tự đọc `.env` nữa.
+
+Nếu sau này đổi provider/generator, thêm `output` tùy chỉnh, hoặc gặp lại
+lỗi `Cannot find module '.prisma/client/default'`, đọc kỹ 5 điểm trên
+trước khi sửa.
