@@ -87,6 +87,14 @@ thực/đặt lại mật khẩu sẽ được **in thẳng ra terminal** đang 
 `npm run dev` (kèm link để bấm), không cần SMTP thật để test luồng đăng
 ký/quên mật khẩu.
 
+### Chưa cấu hình Cloudflare R2 / AWS S3?
+
+Cũng không sao — khi chưa điền đủ 4 biến `STORAGE_*` trong `.env`, file
+đăng tải (`/upload`) sẽ tự động lưu vào thư mục `storage-local/` trên đĩa
+thay vì R2/S3 thật. Test được toàn bộ luồng đăng tải/tải xuống ngay; khi
+nào deploy thật hoặc muốn dùng cloud, điền đủ 4 biến đó vào `.env` là tự
+chuyển sang R2/S3, không cần sửa code gì thêm.
+
 ## Script
 
 ```bash

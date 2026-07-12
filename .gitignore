@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# file lưu cục bộ khi chưa cấu hình R2/S3 (xem lib/storage.ts)
+/storage-local/

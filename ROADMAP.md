@@ -91,11 +91,31 @@ thao tác thuộc quản lý tài khoản hơn là xác thực.
 
 
 
-## ⬜ Giai đoạn 4 — Upload tài liệu
+## ✅ Giai đoạn 4 — Upload tài liệu (hoàn tất)
 
-- API upload PDF/DOCX/PPTX lên Cloudflare R2/S3, kiểm tra loại file và giới
-  hạn dung lượng
-- Form đăng tải đầy đủ metadata theo yêu cầu gốc
+- [x] `lib/storage.ts`: lớp trừu tượng lưu trữ — dùng Cloudflare R2/AWS S3
+      (qua `@aws-sdk/client-s3`, cùng SDK cho cả hai vì R2 tương thích API
+      S3) khi đã cấu hình đủ biến `STORAGE_*`; **tự động rơi về lưu đĩa cục
+      bộ** (`storage-local/`) khi chưa cấu hình — test được toàn bộ luồng
+      upload/tải ngay, không cần tài khoản R2/S3 trước
+- [x] `app/api/files/[...key]/route.ts` — phục vụ file ở chế độ local,
+      yêu cầu đăng nhập + chặn path traversal
+- [x] `POST /api/documents`: validate metadata (Zod), **kiểm tra loại file
+      thật qua magic bytes/cấu trúc OOXML** bằng thư viện `file-type` (so
+      khớp nội dung thật, không tin đuôi file hay Content-Type client gửi
+      — cả hai đều dễ giả mạo), giới hạn dung lượng theo
+      `UPLOAD_MAX_SIZE_MB`, tạo `Document` với `status = PENDING`
+- [x] `lib/slug.ts` — sinh slug từ tiêu đề tiếng Việt có dấu + hậu tố ngẫu
+      nhiên (dùng cho URL tài liệu ở Giai đoạn 7)
+- [x] Trang `/upload`: form đầy đủ (tiêu đề, mô tả, từ khóa, chuyên đề,
+      lớp học, tác giả, file), hiện trạng thái "đang chờ duyệt" sau khi gửi
+- [x] `components/ui/select.tsx` bổ sung vào bộ UI dùng chung
+- [x] Nav "Hồ sơ / Đăng tải" trong `(dashboard)/layout.tsx`
+
+**Quyết định thiết kế:** `previewUrl` chưa được set ở giai đoạn này — xem
+trước PDF (Giai đoạn 7) sẽ dùng thẳng URL tải của file gốc qua iframe;
+DOCX/PPTX chưa có xem trước (cần dịch vụ convert riêng, ngoài phạm vi dự
+án hiện tại).
 
 ## ⬜ Giai đoạn 5 — Quy trình phê duyệt
 
