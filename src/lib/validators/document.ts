@@ -50,3 +50,24 @@ export function parseKeywords(raw: string | undefined): string[] {
     .filter(Boolean)
     .slice(0, 10);
 }
+
+/**
+ * Quyết định duyệt/từ chối tài liệu — bắt buộc ghi lý do khi từ chối,
+ * không bắt buộc khi duyệt (khớp yêu cầu "Có thể từ chối và ghi lý do").
+ */
+export const reviewDocumentSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("APPROVED"),
+    note: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    status: z.literal("REJECTED"),
+    note: z
+      .string({ error: "Vui lòng nhập lý do từ chối" })
+      .trim()
+      .min(5, "Lý do từ chối phải có ít nhất 5 ký tự")
+      .max(500, "Lý do từ chối tối đa 500 ký tự"),
+  }),
+]);
+
+export type ReviewDocumentInput = z.infer<typeof reviewDocumentSchema>;

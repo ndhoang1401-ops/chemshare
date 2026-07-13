@@ -1,13 +1,11 @@
 import Link from "next/link";
 import { auth } from "@/auth";
-import { SITE_NAME } from "@/lib/constants";
+import { prisma } from "@/lib/prisma";
+import { SITE_NAME, USER_ROLES } from "@/lib/constants";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoutButton } from "@/components/auth/logout-button";
 
-const NAV_LINKS = [
-  { href: "/profile", label: "Hồ sơ" },
-  { href: "/upload", label: "Đăng tải" },
-];
+const REVIEWER_ROLES: string[] = [USER_ROLES.MODERATOR, USER_ROLES.ADMIN];
 
 export default async function DashboardLayout({
   children,
@@ -15,6 +13,21 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
+
+  const unreadCount = session?.user
+    ? await prisma.notification.count({
+        where: { userId: session.user.id, isRead: false },
+      })
+    : 0;
+
+  const navLinks = [
+    { href: "/profile", label: "Hồ sơ" },
+    { href: "/upload", label: "Đăng tải" },
+    { href: "/notifications", label: "Thông báo", badge: unreadCount },
+  ];
+
+  const isReviewer =
+    !!session?.user && REVIEWER_ROLES.includes(session.user.role);
 
   return (
     <div className="bg-paper min-h-screen">
@@ -33,15 +46,28 @@ export default async function DashboardLayout({
             </Link>
 
             <nav className="hidden items-center gap-4 sm:flex">
-              {NAV_LINKS.map((link) => (
+              {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="text-ink-soft hover:text-flame text-sm"
+                  className="text-ink-soft hover:text-flame flex items-center gap-1.5 text-sm"
                 >
                   {link.label}
+                  {!!link.badge && (
+                    <span className="bg-flame text-paper-raised flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-mono text-[10px]">
+                      {link.badge}
+                    </span>
+                  )}
                 </Link>
               ))}
+              {isReviewer && (
+                <Link
+                  href="/admin/approvals"
+                  className="text-ink-soft hover:text-flame text-sm"
+                >
+                  Kiểm duyệt
+                </Link>
+              )}
             </nav>
           </div>
 

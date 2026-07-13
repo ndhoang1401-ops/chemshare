@@ -117,10 +117,27 @@ trước PDF (Giai đoạn 7) sẽ dùng thẳng URL tải của file gốc qua 
 DOCX/PPTX chưa có xem trước (cần dịch vụ convert riêng, ngoài phạm vi dự
 án hiện tại).
 
-## ⬜ Giai đoạn 5 — Quy trình phê duyệt
+## ✅ Giai đoạn 5 — Quy trình phê duyệt (hoàn tất)
 
-- Trạng thái "chờ duyệt" mặc định, API duyệt/từ chối cho Moderator/Admin
-- Hệ thống thông báo (bảng `Notifications`)
+- [x] `(admin)/layout.tsx` — kiểm tra vai trò Moderator/Admin (phòng vệ
+      thêm ngoài `proxy.ts`), header + nav riêng cho khu quản trị
+- [x] Trang `/admin/approvals`: danh sách tài liệu "chờ duyệt", kèm link
+      "Xem file" (tải trực tiếp từ storage để kiểm duyệt viên xem trước
+      khi quyết định — tự dùng lại `lib/storage.ts` từ Giai đoạn 4)
+- [x] `POST /api/documents/[id]/review`: tạo `Review`, cập nhật
+      `Document.status`, tạo `Notification` cho người đăng — cả 3 trong
+      1 transaction (`prisma.$transaction`) để đảm bảo nhất quán
+- [x] Bắt buộc ghi lý do khi từ chối (Zod discriminated union: `APPROVED`
+      không cần note, `REJECTED` bắt buộc note ≥ 5 ký tự)
+- [x] Chặn duyệt lại tài liệu đã xử lý (chỉ thao tác được khi đang
+      `PENDING`, tránh 2 kiểm duyệt viên duyệt trùng)
+- [x] `lib/activity-log.ts` — bắt đầu ghi nhật ký hoạt động
+      (`document.approve`/`document.reject`) cho trang quản trị hiển thị ở
+      Giai đoạn 9; ghi log lỗi không làm hỏng thao tác chính
+- [x] Trang `/notifications`: danh sách thông báo, bấm để đánh dấu đã đọc,
+      nút "Đánh dấu tất cả đã đọc"
+- [x] Nav dashboard: thêm mục "Thông báo" (kèm số chưa đọc) và "Kiểm
+      duyệt" (chỉ hiện với Moderator/Admin)
 
 ## ⬜ Giai đoạn 6 — Tìm kiếm
 

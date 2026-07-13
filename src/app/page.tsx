@@ -15,7 +15,7 @@ const ROADMAP = [
   { stage: 2, title: "Xác thực (Auth)", done: true },
   { stage: 3, title: "Hồ sơ người dùng", done: true },
   { stage: 4, title: "Upload tài liệu", done: true },
-  { stage: 5, title: "Quy trình phê duyệt", done: false },
+  { stage: 5, title: "Quy trình phê duyệt", done: true },
   { stage: 6, title: "Tìm kiếm", done: false },
   { stage: 7, title: "Trang công khai", done: false },
   { stage: 8, title: "Tải xuống & log", done: false },
