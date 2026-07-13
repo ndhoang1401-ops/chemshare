@@ -31,10 +31,28 @@ const isLocalDb =
   connectionString.includes("localhost") ||
   connectionString.includes("127.0.0.1");
 
+/**
+ * Bỏ tham số `sslmode` khỏi connection string trước khi đưa cho `pg`.
+ * Lý do: `pg-connection-string` tự parse `sslmode` trong URL và in cảnh
+ * báo SECURITY WARNING với các giá trị "prefer"/"require"/"verify-ca" (vì
+ * hành vi này sẽ đổi ở bản sau) — cảnh báo này in ra ngay cả khi ta ĐÃ
+ * truyền `ssl` tường minh bên dưới để tự quyết định, nên tốt nhất là
+ * không để `pg` thấy `sslmode` trong URL nữa, tránh nhiễu console.
+ */
+function stripSslModeParam(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete("sslmode");
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 const pool =
   globalForPrisma.pool ??
   new Pool({
-    connectionString,
+    connectionString: stripSslModeParam(connectionString),
     ssl: isLocalDb ? undefined : { rejectUnauthorized: false },
   });
 
