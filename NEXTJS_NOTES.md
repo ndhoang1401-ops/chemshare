@@ -22,6 +22,11 @@ export function proxy(request: Request) {
 
 → Áp dụng ở **Giai đoạn 2** khi viết middleware phân quyền theo role.
 
+> ⚠️ **Đính chính:** "Runtime luôn là nodejs" KHÔNG có nghĩa là import gì
+> vào `proxy.ts` cũng được — xem mục 11, `proxy.ts` vẫn được đóng gói
+> (bundle) riêng biệt và không nhét được native addon vào, bất kể runtime
+> khai báo là gì.
+
 ## 2. API bất đồng bộ (Async Request APIs)
 
 Từ Next.js 16, các API sau **bắt buộc phải `await`**, không còn hỗ trợ truy
@@ -148,3 +153,47 @@ Dự án dùng **Prisma 7.8.0**, phiên bản này đổi kiến trúc so với 
 Nếu sau này đổi provider/generator, thêm `output` tùy chỉnh, hoặc gặp lại
 lỗi `Cannot find module '.prisma/client/default'`, đọc kỹ 5 điểm trên
 trước khi sửa.
+
+## 11. `proxy.ts` KHÔNG được import "@/auth" (bản đầy đủ)
+
+Dù mục 1 nói runtime của `proxy` luôn là `nodejs`, **`proxy.ts` vẫn được
+Next.js/Turbopack đóng gói thành một bundle riêng biệt** (tách khỏi phần
+còn lại của app) trước khi chạy. Bundle này **không thể nhét native addon
+vào** (file `.node` nhị phân, load qua `require()` tới đường dẫn thật
+trong `node_modules` — không có cách nào "gộp" vào một chunk JS duy nhất),
+bất kể runtime khai báo là gì.
+
+`src/auth.ts` (bản đầy đủ, có Credentials provider) import `lib/prisma.ts`
+(Prisma + `pg`) và `lib/password.ts` (`@node-rs/argon2` — native addon).
+Import thẳng `@/auth` vào `proxy.ts` gây lỗi build:
+
+```
+Export auth doesn't exist in target module
+./src/proxy.ts
+The export auth was not found in module [project]/src/auth.ts [middleware] (ecmascript).
+```
+
+**Cách đúng** (pattern chính thức của Auth.js v5 cho middleware): tạo một
+instance `NextAuth()` RIÊNG trong chính `proxy.ts`, chỉ dùng
+`auth.config.ts` (không có provider, không đụng Prisma/Argon2/nodemailer):
+
+```ts
+// src/proxy.ts
+import NextAuth from "next-auth";
+import { authConfig } from "@/auth.config";
+
+const { auth } = NextAuth(authConfig);
+export default auth;
+```
+
+Vẫn hoạt động đúng vì `proxy.ts` chỉ cần **đọc/giải mã JWT cookie đã có
+sẵn** để biết ai đang đăng nhập + role gì — không cần biết provider nào
+cả (provider chỉ cần thiết lúc đăng nhập MỚI, việc đó luôn đi qua
+`app/api/auth/[...nextauth]/route.ts` dùng bản đầy đủ `@/auth`).
+
+→ Quy tắc chung: **bất cứ thứ gì import vào `proxy.ts` (kể cả gián tiếp,
+qua nhiều lớp import) đều phải edge/bundle-safe** — không Prisma, không
+native addon (argon2, sharp, bcrypt...), không SDK cần Node `fs`/network
+socket trực tiếp. Nếu cần thêm logic vào `authorized` callback mà logic
+đó cần các thứ trên, cân nhắc chuyển logic đó vào route handler/page thay
+vì proxy.
