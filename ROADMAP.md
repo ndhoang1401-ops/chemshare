@@ -139,18 +139,52 @@ DOCX/PPTX chưa có xem trước (cần dịch vụ convert riêng, ngoài phạ
 - [x] Nav dashboard: thêm mục "Thông báo" (kèm số chưa đọc) và "Kiểm
       duyệt" (chỉ hiện với Moderator/Admin)
 
-## ⬜ Giai đoạn 6 — Tìm kiếm
+## ✅ Giai đoạn 6 — Tìm kiếm (hoàn tất)
 
-- PostgreSQL Full Text Search theo tiêu đề, từ khóa, chuyên đề, lớp, tác giả
+- [x] `lib/search.ts`: PostgreSQL Full Text Search theo tiêu đề/từ khóa/tác
+      giả/mô tả (config `simple` — Postgres không có dictionary tiếng Việt
+      sẵn nên không dùng `english` để tránh stemming sai ngữ nghĩa), lọc
+      thêm theo chuyên đề và lớp. **Đã cài Postgres ngay trong sandbox và
+      chạy thử câu SQL thật** (không chỉ đọc code) với dữ liệu tiếng Việt
+      có dấu — xác nhận đúng kết quả, đúng thứ tự xếp hạng, loại đúng tài
+      liệu chưa duyệt.
+- [x] `components/documents/search-form.tsx` — form GET thuần, không cần
+      JS, dùng chung cho trang chủ và trang kết quả
+- [x] Trang `/search`: kết quả + phân trang, giữ nguyên bộ lọc qua URL
 
-## ⬜ Giai đoạn 7 — Trang công khai
+## ✅ Giai đoạn 7 — Trang công khai (hoàn tất)
 
-- Trang chủ đầy đủ (thay thế bản scaffold ở Giai đoạn 0)
-- Trang chi tiết tài liệu
+- [x] `app/(public)/layout.tsx` — header/footer dùng chung; **di chuyển
+      trang chủ từ `app/page.tsx` vào `app/(public)/page.tsx`** để dùng
+      chung layout này (không đổi URL, `/` vẫn là `/`)
+- [x] Trang chủ đầy đủ: thanh tìm kiếm lớn, chuyên mục phổ biến (ô nguyên
+      tố kèm số tài liệu thật), tài liệu mới nhất, tài liệu nổi bật,
+      thống kê hệ thống — thay thế bản scaffold từ Giai đoạn 0
+- [x] Trang chi tiết `/documents/[slug]`: đầy đủ thông tin, xem trước PDF
+      (iframe), tài liệu liên quan (cùng chuyên đề); tài liệu chưa duyệt
+      trả 404 cho người không liên quan (chỉ chủ tài liệu + Moderator/
+      Admin xem được) thay vì 403 — tránh lộ sự tồn tại
+      của tài liệu chưa công khai
+- [x] Tăng `viewCount` mỗi lượt xem trang chi tiết
 
-## ⬜ Giai đoạn 8 — Tải xuống & log
+## ✅ Giai đoạn 8 — Tải xuống & log (phần lõi đã hoàn tất cùng Giai đoạn 7)
 
-- Đếm lượt tải, ghi log bảng `Downloads`, chỉ user đăng nhập mới tải được
+Trang chi tiết tài liệu (Giai đoạn 7) cần nút tải xuống hoạt động thật nên
+phần lõi của giai đoạn này đã được làm luôn:
+
+- [x] `POST /api/documents/[id]/download`: yêu cầu đăng nhập, kiểm tra
+      quyền xem (tài liệu đã duyệt, hoặc là chủ tài liệu/Moderator/Admin),
+      tăng `downloadCount` + tạo bản ghi `Download` trong 1 transaction,
+      trả về URL tải thật
+- [x] `components/documents/download-button.tsx` — ẩn/disable khi chưa
+      đăng nhập, gọi API rồi điều hướng tới URL tải
+- [x] Sửa lại `app/api/files/[...key]` (route phục vụ file chế độ local
+      từ Giai đoạn 4): bỏ yêu cầu đăng nhập bắt buộc ở route phục vụ —
+      khớp đúng ngữ nghĩa với presigned URL thật (quyền quyết định ở NƠI
+      GỌI `getDownloadUrl()`, không phải ở bước phục vụ file)
+
+**Còn lại cho phần hoàn thiện sau (không chặn dùng được):** giới hạn tốc
+độ tải (rate limiting) thuộc Giai đoạn 12 — Bảo mật.
 
 ## ⬜ Giai đoạn 9 — Trang quản trị
 

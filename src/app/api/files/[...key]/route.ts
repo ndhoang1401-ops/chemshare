@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { readLocalFile, storageMode } from "@/lib/storage";
 
 /**
@@ -7,10 +6,14 @@ import { readLocalFile, storageMode } from "@/lib/storage";
  * hình R2/S3 — xem lib/storage.ts). Ở chế độ "cloud", tải file luôn đi
  * qua presigned URL trực tiếp từ R2/S3, route này sẽ không được gọi tới.
  *
- * Đây là điểm kiểm tra đăng nhập cho chế độ local, tương đương vai trò mà
- * presigned URL đảm nhiệm ở chế độ cloud (chỉ người có URL còn hạn mới
- * xem được). Kiểm tra "tài liệu đã duyệt hay chưa" thuộc về tầng gọi
- * (Giai đoạn 7/8), không phải route lưu trữ mức thấp này.
+ * CỐ Ý không kiểm tra đăng nhập ở đây: một presigned URL S3/R2 thật, một
+ * khi đã được server sinh ra, cũng không tự xác thực lại danh tính người
+ * bấm vào link — quyền truy cập được quyết định ở NƠI GỌI
+ * `getDownloadUrl()` (vd. trang chi tiết tài liệu chỉ gọi hàm này cho
+ * tài liệu đã duyệt hoặc khi người dùng có quyền xem; API tải xuống chỉ
+ * gọi hàm này sau khi đã xác thực đăng nhập). Route này chỉ đóng vai trò
+ * tương đương "ổ chứa" — bảo vệ bằng key ngẫu nhiên 96-bit không đoán
+ * được (xem lib/storage.ts), không phải bằng session ở bước phục vụ.
  */
 export async function GET(
   request: Request,
@@ -18,11 +21,6 @@ export async function GET(
 ) {
   if (storageMode !== "local") {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
-  }
-
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const { key } = await params;
