@@ -13,6 +13,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_credentials: "Email hoặc mật khẩu không đúng.",
   email_not_verified:
     "Email chưa được xác thực. Vui lòng kiểm tra hộp thư để xác thực trước khi đăng nhập.",
+  account_suspended:
+    "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.",
 };
 
 export function LoginForm() {

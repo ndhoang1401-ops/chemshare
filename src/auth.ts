@@ -18,6 +18,10 @@ class EmailNotVerifiedError extends CredentialsSignin {
   code = "email_not_verified";
 }
 
+class AccountSuspendedError extends CredentialsSignin {
+  code = "account_suspended";
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [
@@ -51,6 +55,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!user.emailVerifiedAt) {
           throw new EmailNotVerifiedError();
+        }
+
+        if (!user.isActive) {
+          throw new AccountSuspendedError();
         }
 
         return {

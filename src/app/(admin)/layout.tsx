@@ -7,8 +7,6 @@ import { LogoutButton } from "@/components/auth/logout-button";
 
 const REVIEWER_ROLES: string[] = [USER_ROLES.MODERATOR, USER_ROLES.ADMIN];
 
-const NAV_LINKS = [{ href: "/admin/approvals", label: "Hàng chờ phê duyệt" }];
-
 export default async function AdminLayout({
   children,
 }: {
@@ -21,34 +19,36 @@ export default async function AdminLayout({
     redirect("/");
   }
 
+  const isAdmin = session.user.role === USER_ROLES.ADMIN;
+
+  const navLinks = [
+    { href: "/admin", label: "Dashboard" },
+    { href: "/admin/approvals", label: "Hàng chờ phê duyệt" },
+    { href: "/admin/documents", label: "Tài liệu" },
+    { href: "/admin/stats", label: "Thống kê" },
+    ...(isAdmin
+      ? [
+          { href: "/admin/users", label: "Người dùng" },
+          { href: "/admin/categories", label: "Danh mục" },
+          { href: "/admin/logs", label: "Nhật ký" },
+        ]
+      : []),
+  ];
+
   return (
     <div className="bg-paper min-h-screen">
       <header className="border-line border-b">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="border-line bg-flame text-paper-raised flex h-8 w-8 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
-                <span className="font-display text-sm leading-none font-semibold">
-                  Nt
-                </span>
-              </div>
-              <span className="font-display text-ink text-sm font-semibold">
-                {SITE_NAME} · Quản trị
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="border-line bg-flame text-paper-raised flex h-8 w-8 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
+              <span className="font-display text-sm leading-none font-semibold">
+                Nt
               </span>
-            </Link>
-
-            <nav className="hidden items-center gap-4 sm:flex">
-              {NAV_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="text-ink-soft hover:text-flame text-sm"
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
+            </div>
+            <span className="font-display text-ink text-sm font-semibold">
+              {SITE_NAME} · Quản trị
+            </span>
+          </Link>
 
           <div className="flex items-center gap-3">
             <Avatar
@@ -66,9 +66,23 @@ export default async function AdminLayout({
             <LogoutButton />
           </div>
         </div>
+
+        <div className="mx-auto max-w-5xl overflow-x-auto px-6">
+          <nav className="flex items-center gap-5 pb-3">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-ink-soft hover:text-flame shrink-0 text-sm whitespace-nowrap"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-6 py-10">{children}</main>
+      <main className="mx-auto max-w-5xl px-6 py-10">{children}</main>
     </div>
   );
 }

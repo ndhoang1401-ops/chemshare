@@ -186,10 +186,44 @@ phần lõi của giai đoạn này đã được làm luôn:
 **Còn lại cho phần hoàn thiện sau (không chặn dùng được):** giới hạn tốc
 độ tải (rate limiting) thuộc Giai đoạn 12 — Bảo mật.
 
-## ⬜ Giai đoạn 9 — Trang quản trị
+## ✅ Giai đoạn 9 — Trang quản trị (hoàn tất)
 
-- Dashboard, quản lý user/tài liệu/danh mục, hàng chờ duyệt, nhật ký hoạt
-  động, thống kê
+> ⚠️ **Cần migration mới:** thêm field `isActive` vào `User` (khóa tài
+> khoản) — chạy `npx prisma migrate dev` sau khi cập nhật code.
+
+- [x] Phân quyền trong khu quản trị: **Moderator + Admin** xem được
+      Dashboard/Hàng chờ phê duyệt/Tài liệu/Thống kê; **chỉ Admin** vào
+      được Quản lý người dùng/Quản lý danh mục/Nhật ký hoạt động —
+      `lib/auth-guards.ts` (`requireReviewer`/`requireAdmin`)
+- [x] `/admin` — Dashboard: số liệu tổng quan + link nhanh tới từng mục
+      (nội dung khác nhau theo vai trò)
+- [x] `/admin/users` (Admin) — xem, đổi vai trò, khóa/mở khóa tài khoản;
+      chặn tự đổi vai trò/tự khóa chính mình
+- [x] `/admin/documents` (Moderator + Admin xem, Admin xóa) — xem toàn bộ
+      tài liệu mọi trạng thái, lọc theo trạng thái, xóa (dọn cả file trên
+      storage)
+- [x] `/admin/categories` (Admin) — CRUD chuyên đề Hóa học; chặn xóa danh
+      mục còn tài liệu (kiểm tra ở tầng ứng dụng + có `onDelete: Restrict`
+      ở tầng DB làm lớp bảo vệ thứ hai — **đã test cascade/restrict thật
+      bằng Postgres**, không chỉ đọc code)
+- [x] `/admin/logs` (Admin) — nhật ký hoạt động (ghi từ Giai đoạn 5), dịch
+      action sang tiếng Việt kèm chi tiết
+- [x] `/admin/stats` (Moderator + Admin) — top tài liệu tải nhiều nhất,
+      lượt tải theo chuyên đề, lượt tải gần đây
+- [x] Tài khoản bị khóa không đăng nhập được (`auth.ts`), thông báo lỗi rõ
+      ràng ở form đăng nhập
+
+**Đã test kỹ bằng Postgres thật trong sandbox** (không chỉ đọc code):
+dịch toàn bộ schema (6 enum, 8 bảng) sang DDL và áp thử — không lỗi cú
+pháp; chèn dữ liệu thật rồi xác nhận: xóa User cascade đúng xuống
+Document → Review/Download, xóa User được tham chiếu trong ActivityLog
+đúng thành NULL (giữ log), xóa Category còn Document bị chặn đúng bởi
+`onDelete: Restrict`.
+
+**Giới hạn đã biết:** tài khoản bị khóa vẫn dùng được session JWT hiện có
+tới khi hết hạn/đăng xuất (không có DB re-check theo thời gian thực trong
+`proxy.ts` — xem NEXTJS_NOTES.md mục 11 vì sao proxy.ts không thể đụng
+Prisma). Chỉ chặn được ở lần đăng nhập tiếp theo.
 
 ## ⬜ Giai đoạn 10 — Tiện ích Hóa học
 
