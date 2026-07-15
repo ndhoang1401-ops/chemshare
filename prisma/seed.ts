@@ -1,8 +1,10 @@
-import { PrismaClient } from "@prisma/client";
+// Dùng chung instance từ lib/prisma.ts (đã cấu hình driver adapter theo
+// yêu cầu bắt buộc của Prisma 7 — xem NEXTJS_NOTES.md mục 10) thay vì tự
+// `new PrismaClient()` không tham số, vì cách đó sẽ lỗi
+// "needs to be constructed with a non-empty, valid PrismaClientOptions".
+import { prisma } from "../src/lib/prisma";
 import { CATEGORIES } from "../src/lib/constants";
 import { hashPassword } from "../src/lib/password";
-
-const prisma = new PrismaClient();
 
 const DEMO_PASSWORD = "MatKhau123!";
 
