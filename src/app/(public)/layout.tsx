@@ -5,6 +5,11 @@ import { Avatar } from "@/components/ui/avatar";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { buttonVariants } from "@/components/ui/button";
 
+const NAV_LINKS = [
+  { href: "/search", label: "Tìm tài liệu" },
+  { href: "/tools", label: "Tiện ích Hóa học" },
+];
+
 export default async function PublicLayout({
   children,
 }: {
@@ -14,26 +19,44 @@ export default async function PublicLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-line border-b">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="border-line bg-flame text-paper-raised flex h-9 w-9 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
-              <span className="font-display text-sm leading-none font-semibold">
-                Nt
-              </span>
-            </div>
-            <div>
-              <p className="font-display text-ink text-sm leading-none font-semibold">
-                {SITE_NAME}
-              </p>
-              <p className="text-ink-soft hidden text-xs sm:block">
-                {SITE_TAGLINE}
-              </p>
-            </div>
-          </Link>
+      <header className="border-line bg-paper/90 sticky top-0 z-10 border-b backdrop-blur-sm">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 px-6 py-4">
+          <div className="flex items-center gap-8">
+            <Link href="/" className="flex items-center gap-2">
+              <div className="border-line bg-flame text-paper-raised flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
+                <span className="font-display text-sm leading-none font-semibold">
+                  Nt
+                </span>
+              </div>
+              <div className="hidden sm:block">
+                <p className="font-display text-ink text-sm leading-none font-semibold">
+                  {SITE_NAME}
+                </p>
+                <p className="text-ink-soft text-xs">{SITE_TAGLINE}</p>
+              </div>
+            </Link>
+
+            <nav className="hidden items-center gap-5 md:flex">
+              {NAV_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="text-ink-soft hover:text-flame text-sm transition-colors"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
 
           {session?.user ? (
             <div className="flex items-center gap-3">
+              <Link
+                href="/upload"
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                Đăng tài liệu
+              </Link>
               <Link
                 href="/profile"
                 className="hidden items-center gap-2 text-sm hover:opacity-80 sm:flex"
@@ -44,7 +67,7 @@ export default async function PublicLayout({
                   size="sm"
                 />
                 <span className="text-ink">{session.user.name}</span>
-                <span className="text-ink-soft">
+                <span className="text-ink-soft hidden lg:inline">
                   · {ROLE_LABELS[session.user.role]}
                 </span>
               </Link>
@@ -64,15 +87,109 @@ export default async function PublicLayout({
             </div>
           )}
         </div>
+
+        <div className="border-line border-t px-6 py-2 md:hidden">
+          <nav className="mx-auto flex max-w-5xl items-center gap-4">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-ink-soft hover:text-flame text-sm"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
       </header>
 
       <main className="flex-1">{children}</main>
 
-      <footer className="border-line border-t">
-        <div className="text-ink-soft mx-auto max-w-5xl px-6 py-6 text-xs">
-          <p>
-            {SITE_NAME} · Nền tảng chia sẻ tài liệu Hóa học cho học sinh, sinh
-            viên, giáo viên và người tự học.
+      <footer className="border-line bg-paper-raised border-t">
+        <div className="mx-auto max-w-5xl px-6 py-8">
+          <div className="grid gap-8 sm:grid-cols-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="border-line bg-flame text-paper-raised flex h-7 w-7 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
+                  <span className="font-display text-xs leading-none font-semibold">
+                    Nt
+                  </span>
+                </div>
+                <span className="font-display text-ink text-sm font-semibold">
+                  {SITE_NAME}
+                </span>
+              </div>
+              <p className="text-ink-soft mt-3 text-xs leading-relaxed">
+                Nền tảng chia sẻ tài liệu Hóa học cho học sinh, sinh viên, giáo
+                viên và người tự học. Mọi tài liệu đều qua kiểm duyệt trước khi
+                công khai.
+              </p>
+            </div>
+            <div>
+              <p className="text-ink-soft font-mono text-xs tracking-wide uppercase">
+                Khám phá
+              </p>
+              <ul className="mt-3 space-y-2 text-sm">
+                <li>
+                  <Link
+                    href="/search"
+                    className="text-ink-soft hover:text-flame"
+                  >
+                    Tìm tài liệu
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/tools"
+                    className="text-ink-soft hover:text-flame"
+                  >
+                    Tiện ích Hóa học
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/upload"
+                    className="text-ink-soft hover:text-flame"
+                  >
+                    Đăng tài liệu
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-ink-soft font-mono text-xs tracking-wide uppercase">
+                Tiện ích
+              </p>
+              <ul className="mt-3 space-y-2 text-sm">
+                <li>
+                  <Link
+                    href="/tools/periodic-table"
+                    className="text-ink-soft hover:text-flame"
+                  >
+                    Bảng tuần hoàn
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/tools/molar-mass"
+                    className="text-ink-soft hover:text-flame"
+                  >
+                    Tính khối lượng mol
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/tools/equation-balancer"
+                    className="text-ink-soft hover:text-flame"
+                  >
+                    Cân bằng phương trình
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <p className="border-line text-ink-soft mt-8 border-t pt-4 text-xs">
+            © {new Date().getFullYear()} {SITE_NAME}.
           </p>
         </div>
       </footer>

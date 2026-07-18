@@ -225,10 +225,45 @@ tới khi hết hạn/đăng xuất (không có DB re-check theo thời gian th�
 `proxy.ts` — xem NEXTJS_NOTES.md mục 11 vì sao proxy.ts không thể đụng
 Prisma). Chỉ chặn được ở lần đăng nhập tiếp theo.
 
-## ⬜ Giai đoạn 10 — Tiện ích Hóa học
+## ✅ Giai đoạn 10 — Tiện ích Hóa học (hoàn tất)
 
-- Bảng tuần hoàn, máy tính khối lượng mol, cân bằng phương trình, chuyển đổi
-  nồng độ, tra công thức nhanh
+Toàn bộ thuật toán đã test kỹ bằng script thật trong sandbox trước khi
+lắp vào giao diện — không phải "cho có", giải được input tùy ý trong
+phạm vi hóa học phổ thông/đại học đại cương:
+
+- [x] `lib/chemistry/elements.ts` — đầy đủ **118 nguyên tố** (nguồn:
+      Bowserinator/Periodic-Table-JSON, đối chiếu tên tiếng Việt qua
+      Wikipedia), gồm khối lượng nguyên tử, cấu hình electron, số lớp,
+      nhóm/chu kỳ, vị trí lưới thật
+- [x] `lib/chemistry/formula-parser.ts` — parser đệ quy thật (không phải
+      regex chắp vá), xử lý ngoặc lồng nhau nhiều cấp
+      (`K4[Fe(CN)6]`, `[Cu(NH3)4]SO4`) và hydrat (`CuSO4.5H2O`) — **đã
+      test 24 công thức thật + 4 trường hợp lỗi**, tất cả đúng
+- [x] `lib/chemistry/molar-mass.ts` — **đã đối chiếu 12 công thức với giá
+      trị thật** (H2O=18.015, NaCl=58.44, CuSO4.5H2O=249.68...), khớp
+      chính xác; validate ký hiệu nguyên tố không tồn tại
+- [x] `lib/chemistry/equation-balancer.ts` — cân bằng bằng **đại số tuyến
+      tính thật** (Gaussian elimination trên phân số chính xác BigInt, tìm
+      null space — không hard-code mẫu nào). **Đã test 13 phản ứng thật**
+      kể cả phản ứng oxi hóa khử khó (`KMnO4 + HCl`), tất cả ra đúng hệ số
+      chuẩn sách giáo khoa
+- [x] `lib/chemistry/concentration.ts` — chuyển đổi nồng độ mol ↔ % khối
+      lượng ↔ khối lượng riêng, giải được theo bất kỳ chiều nào (đủ 2/3
+      dữ kiện). Đã test khớp ví dụ kinh điển H2SO4 98% D=1.84 → 18.4M
+- [x] `lib/chemistry/compounds.ts` — **149 hợp chất** thường gặp (axit,
+      bazơ, muối, oxit, hữu cơ) kèm tên thường gọi tiếng Việt; đã test
+      toàn bộ parse được + không trùng lặp
+- [x] 5 trang công cụ đầy đủ tại `/tools/*` + trang chỉ mục `/tools`,
+      công khai không cần đăng nhập
+- [x] Bảng tuần hoàn tương tác: lưới đúng vị trí thật, màu theo 10 nhóm,
+      click xem chi tiết, tìm kiếm theo tên/ký hiệu/số hiệu
+
+**Đã tranh thủ nâng cấp giao diện luôn (theo yêu cầu):** thêm
+`components/layout/nav-link.tsx` (active state + icon) cho nav dashboard
+và admin, thêm icon cho toàn bộ card Dashboard quản trị, đồng bộ
+shadow/hiệu ứng hover-lift cho mọi loại card trong site (tài liệu, chuyên
+mục, tiện ích). Việc nâng cấp UI/UX toàn diện hơn (responsive rà soát kỹ,
+dark mode, tối ưu tốc độ) vẫn nằm ở Giai đoạn 11 như kế hoạch.
 
 ## ⬜ Giai đoạn 11 — UI/UX hoàn thiện
 

@@ -4,6 +4,16 @@ import { auth } from "@/auth";
 import { ROLE_LABELS, SITE_NAME, USER_ROLES } from "@/lib/constants";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { NavLink } from "@/components/layout/nav-link";
+import {
+  LayoutDashboard,
+  ClipboardCheck,
+  FileText,
+  BarChart3,
+  Users,
+  FolderKanban,
+  ScrollText,
+} from "lucide-react";
 
 const REVIEWER_ROLES: string[] = [USER_ROLES.MODERATOR, USER_ROLES.ADMIN];
 
@@ -21,24 +31,10 @@ export default async function AdminLayout({
 
   const isAdmin = session.user.role === USER_ROLES.ADMIN;
 
-  const navLinks = [
-    { href: "/admin", label: "Dashboard" },
-    { href: "/admin/approvals", label: "Hàng chờ phê duyệt" },
-    { href: "/admin/documents", label: "Tài liệu" },
-    { href: "/admin/stats", label: "Thống kê" },
-    ...(isAdmin
-      ? [
-          { href: "/admin/users", label: "Người dùng" },
-          { href: "/admin/categories", label: "Danh mục" },
-          { href: "/admin/logs", label: "Nhật ký" },
-        ]
-      : []),
-  ];
-
   return (
     <div className="bg-paper min-h-screen">
-      <header className="border-line border-b">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+      <header className="border-line bg-paper/90 sticky top-0 z-10 border-b backdrop-blur-sm">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
           <Link href="/" className="flex items-center gap-2">
             <div className="border-line bg-flame text-paper-raised flex h-8 w-8 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
               <span className="font-display text-sm leading-none font-semibold">
@@ -46,7 +42,7 @@ export default async function AdminLayout({
               </span>
             </div>
             <span className="font-display text-ink text-sm font-semibold">
-              {SITE_NAME} · Quản trị
+              {SITE_NAME} <span className="text-ink-soft">/ Quản trị</span>
             </span>
           </Link>
 
@@ -67,17 +63,32 @@ export default async function AdminLayout({
           </div>
         </div>
 
-        <div className="mx-auto max-w-5xl overflow-x-auto px-6">
-          <nav className="flex items-center gap-5 pb-3">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-ink-soft hover:text-flame shrink-0 text-sm whitespace-nowrap"
-              >
-                {link.label}
-              </Link>
-            ))}
+        <div className="border-line border-t">
+          <nav className="mx-auto flex max-w-5xl items-center gap-1 overflow-x-auto px-4 py-1.5">
+            <NavLink href="/admin" label="Dashboard" icon={LayoutDashboard} />
+            <NavLink
+              href="/admin/approvals"
+              label="Phê duyệt"
+              icon={ClipboardCheck}
+            />
+            <NavLink
+              href="/admin/documents"
+              label="Tài liệu"
+              icon={FileText}
+              matchPrefix
+            />
+            <NavLink href="/admin/stats" label="Thống kê" icon={BarChart3} />
+            {isAdmin && (
+              <>
+                <NavLink href="/admin/users" label="Người dùng" icon={Users} />
+                <NavLink
+                  href="/admin/categories"
+                  label="Danh mục"
+                  icon={FolderKanban}
+                />
+                <NavLink href="/admin/logs" label="Nhật ký" icon={ScrollText} />
+              </>
+            )}
           </nav>
         </div>
       </header>

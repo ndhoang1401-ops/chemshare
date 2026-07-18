@@ -20,7 +20,7 @@ export function DocumentCard({
   return (
     <Link
       href={`/documents/${doc.slug}`}
-      className="border-line bg-paper-raised hover:border-flame flex flex-col rounded-[var(--radius-tile)] border p-5 transition-colors"
+      className="border-line bg-paper-raised hover:border-flame flex flex-col rounded-[var(--radius-tile)] border p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
     >
       <p className="text-ink-soft font-mono text-[11px]">
         {doc.category.name}

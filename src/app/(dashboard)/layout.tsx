@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { SITE_NAME, USER_ROLES } from "@/lib/constants";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { NavLink } from "@/components/layout/nav-link";
+import { User, Upload, Bell, ShieldCheck } from "lucide-react";
 
 const REVIEWER_ROLES: string[] = [USER_ROLES.MODERATOR, USER_ROLES.ADMIN];
 
@@ -20,56 +22,23 @@ export default async function DashboardLayout({
       })
     : 0;
 
-  const navLinks = [
-    { href: "/profile", label: "Hồ sơ" },
-    { href: "/upload", label: "Đăng tải" },
-    { href: "/notifications", label: "Thông báo", badge: unreadCount },
-  ];
-
   const isReviewer =
     !!session?.user && REVIEWER_ROLES.includes(session.user.role);
 
   return (
     <div className="bg-paper min-h-screen">
-      <header className="border-line border-b">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="border-line bg-flame text-paper-raised flex h-8 w-8 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
-                <span className="font-display text-sm leading-none font-semibold">
-                  Nt
-                </span>
-              </div>
-              <span className="font-display text-ink text-sm font-semibold">
-                {SITE_NAME}
+      <header className="border-line bg-paper/90 sticky top-0 z-10 border-b backdrop-blur-sm">
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-3">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="border-line bg-flame text-paper-raised flex h-8 w-8 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
+              <span className="font-display text-sm leading-none font-semibold">
+                Nt
               </span>
-            </Link>
-
-            <nav className="hidden items-center gap-4 sm:flex">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="text-ink-soft hover:text-flame flex items-center gap-1.5 text-sm"
-                >
-                  {link.label}
-                  {!!link.badge && (
-                    <span className="bg-flame text-paper-raised flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-mono text-[10px]">
-                      {link.badge}
-                    </span>
-                  )}
-                </Link>
-              ))}
-              {isReviewer && (
-                <Link
-                  href="/admin/approvals"
-                  className="text-ink-soft hover:text-flame text-sm"
-                >
-                  Kiểm duyệt
-                </Link>
-              )}
-            </nav>
-          </div>
+            </div>
+            <span className="font-display text-ink hidden text-sm font-semibold sm:inline">
+              {SITE_NAME}
+            </span>
+          </Link>
 
           {session?.user && (
             <div className="flex items-center gap-3">
@@ -84,6 +53,27 @@ export default async function DashboardLayout({
               <LogoutButton />
             </div>
           )}
+        </div>
+
+        <div className="border-line border-t">
+          <nav className="mx-auto flex max-w-3xl items-center gap-1 overflow-x-auto px-4 py-1.5">
+            <NavLink href="/profile" label="Hồ sơ" icon={User} />
+            <NavLink href="/upload" label="Đăng tải" icon={Upload} />
+            <NavLink
+              href="/notifications"
+              label="Thông báo"
+              icon={Bell}
+              badge={unreadCount}
+            />
+            {isReviewer && (
+              <NavLink
+                href="/admin"
+                label="Kiểm duyệt"
+                icon={ShieldCheck}
+                matchPrefix
+              />
+            )}
+          </nav>
         </div>
       </header>
 

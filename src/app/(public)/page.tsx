@@ -81,7 +81,7 @@ export default async function HomePage() {
             <Link
               key={category.id}
               href={`/search?category=${category.slug}`}
-              className="group border-line bg-paper-raised hover:border-flame flex aspect-square flex-col items-center justify-center gap-0.5 rounded-[var(--radius-tile)] border transition-colors"
+              className="group border-line bg-paper-raised hover:border-flame flex aspect-square flex-col items-center justify-center gap-0.5 rounded-[var(--radius-tile)] border shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
               title={category.name}
             >
               <span className="text-ink-soft font-mono text-[9px] leading-none">
