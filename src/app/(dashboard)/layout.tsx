@@ -57,19 +57,27 @@ export default async function DashboardLayout({
 
         <div className="border-line border-t">
           <nav className="mx-auto flex max-w-3xl items-center gap-1 overflow-x-auto px-4 py-1.5">
-            <NavLink href="/profile" label="Hồ sơ" icon={User} />
-            <NavLink href="/upload" label="Đăng tải" icon={Upload} />
+            <NavLink
+              href="/profile"
+              label="Hồ sơ"
+              icon={<User className="h-3.5 w-3.5" />}
+            />
+            <NavLink
+              href="/upload"
+              label="Đăng tải"
+              icon={<Upload className="h-3.5 w-3.5" />}
+            />
             <NavLink
               href="/notifications"
               label="Thông báo"
-              icon={Bell}
+              icon={<Bell className="h-3.5 w-3.5" />}
               badge={unreadCount}
             />
             {isReviewer && (
               <NavLink
                 href="/admin"
                 label="Kiểm duyệt"
-                icon={ShieldCheck}
+                icon={<ShieldCheck className="h-3.5 w-3.5" />}
                 matchPrefix
               />
             )}

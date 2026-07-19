@@ -65,28 +65,44 @@ export default async function AdminLayout({
 
         <div className="border-line border-t">
           <nav className="mx-auto flex max-w-5xl items-center gap-1 overflow-x-auto px-4 py-1.5">
-            <NavLink href="/admin" label="Dashboard" icon={LayoutDashboard} />
+            <NavLink
+              href="/admin"
+              label="Dashboard"
+              icon={<LayoutDashboard className="h-3.5 w-3.5" />}
+            />
             <NavLink
               href="/admin/approvals"
               label="Phê duyệt"
-              icon={ClipboardCheck}
+              icon={<ClipboardCheck className="h-3.5 w-3.5" />}
             />
             <NavLink
               href="/admin/documents"
               label="Tài liệu"
-              icon={FileText}
+              icon={<FileText className="h-3.5 w-3.5" />}
               matchPrefix
             />
-            <NavLink href="/admin/stats" label="Thống kê" icon={BarChart3} />
+            <NavLink
+              href="/admin/stats"
+              label="Thống kê"
+              icon={<BarChart3 className="h-3.5 w-3.5" />}
+            />
             {isAdmin && (
               <>
-                <NavLink href="/admin/users" label="Người dùng" icon={Users} />
+                <NavLink
+                  href="/admin/users"
+                  label="Người dùng"
+                  icon={<Users className="h-3.5 w-3.5" />}
+                />
                 <NavLink
                   href="/admin/categories"
                   label="Danh mục"
-                  icon={FolderKanban}
+                  icon={<FolderKanban className="h-3.5 w-3.5" />}
                 />
-                <NavLink href="/admin/logs" label="Nhật ký" icon={ScrollText} />
+                <NavLink
+                  href="/admin/logs"
+                  label="Nhật ký"
+                  icon={<ScrollText className="h-3.5 w-3.5" />}
+                />
               </>
             )}
           </nav>

@@ -76,19 +76,28 @@ export default async function HomePage() {
         <h2 className="font-display mb-4 text-lg font-semibold">
           Chuyên mục phổ biến
         </h2>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 md:grid-cols-7">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
           {popularCategories.map((category) => (
             <Link
               key={category.id}
               href={`/search?category=${category.slug}`}
-              className="group border-line bg-paper-raised hover:border-flame flex aspect-square flex-col items-center justify-center gap-0.5 rounded-[var(--radius-tile)] border shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
-              title={category.name}
+              className="group border-line bg-paper-raised hover:border-flame flex items-center gap-3 rounded-[var(--radius-tile)] border p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
             >
-              <span className="text-ink-soft font-mono text-[9px] leading-none">
-                {countByCategoryId.get(category.id) ?? 0}
+              <span className="bg-flame text-paper-raised flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-[var(--radius-tile)]">
+                <span className="font-mono text-[8px] leading-none opacity-80">
+                  {countByCategoryId.get(category.id) ?? 0}
+                </span>
+                <span className="font-display text-xs leading-none font-bold">
+                  {category.tile}
+                </span>
               </span>
-              <span className="font-display text-sm leading-none font-semibold">
-                {category.tile}
+              <span className="min-w-0">
+                <span className="text-ink block truncate text-sm">
+                  {category.name}
+                </span>
+                <span className="text-ink-soft font-mono text-[11px]">
+                  {countByCategoryId.get(category.id) ?? 0} tài liệu
+                </span>
               </span>
             </Link>
           ))}

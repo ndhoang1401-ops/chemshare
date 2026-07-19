@@ -24,6 +24,44 @@ class AccountSuspendedError extends CredentialsSignin {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    /**
+     * Ghi đè jwt callback của auth.config.ts: giữ nguyên việc gán
+     * id/role lúc đăng nhập, NHƯNG còn làm mới displayName/avatar/role
+     * từ DB ở MỌI lần gọi (không chỉ lúc đăng nhập) — nếu không, sau khi
+     * đổi tên/avatar ở trang hồ sơ, các nơi khác (nav, header...) vẫn
+     * hiện giá trị cũ tới khi đăng xuất-đăng nhập lại, vì JWT session
+     * không tự đồng bộ lại với DB.
+     *
+     * Đánh đổi: mỗi request cần session sẽ có thêm 1 query nhẹ
+     * (findUnique theo id, có index) — chấp nhận được ở quy mô hiện tại.
+     *
+     * Lưu ý: callback này bắt buộc nằm ở auth.ts (không phải
+     * auth.config.ts) vì cần Prisma — auth.config.ts phải giữ
+     * edge/bundle-safe cho proxy.ts (xem NEXTJS_NOTES.md mục 11).
+     */
+    async jwt({ token, user }) {
+      if (user?.id) {
+        token.id = user.id;
+        token.role = user.role;
+      }
+
+      if (token.id) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: { displayName: true, avatar: true, role: true },
+        });
+        if (dbUser) {
+          token.name = dbUser.displayName;
+          token.picture = dbUser.avatar;
+          token.role = dbUser.role;
+        }
+      }
+
+      return token;
+    },
+  },
   providers: [
     Credentials({
       credentials: {

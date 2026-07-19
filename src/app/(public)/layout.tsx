@@ -189,7 +189,8 @@ export default async function PublicLayout({
             </div>
           </div>
           <p className="border-line text-ink-soft mt-8 border-t pt-4 text-xs">
-            © {new Date().getFullYear()} {SITE_NAME}.
+            © {new Date().getFullYear()} {SITE_NAME}. Created by Nguyễn Doãn
+            Hoàng.
           </p>
         </div>
       </footer>

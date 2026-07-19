@@ -1,14 +1,21 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavLinkProps {
   href: string;
   label: string;
-  icon?: LucideIcon;
+  /**
+   * Truyền vào 1 element đã render sẵn (vd. `<User className="h-3.5 w-3.5" />`),
+   * KHÔNG truyền component/type (vd. `User`). Server Component không được
+   * phép truyền thẳng function/class cho Client Component qua props —
+   * chỉ được truyền kết quả đã render (ReactNode). Đây là nơi bị lỗi
+   * "Only plain objects can be passed to Client Components..." trước đó.
+   */
+  icon?: ReactNode;
   badge?: number;
   /** Mặc định so khớp chính xác; bật để active cả các route con (vd. /admin/documents/123). */
   matchPrefix?: boolean;
@@ -17,7 +24,7 @@ interface NavLinkProps {
 export function NavLink({
   href,
   label,
-  icon: Icon,
+  icon,
   badge,
   matchPrefix,
 }: NavLinkProps) {
@@ -34,7 +41,7 @@ export function NavLink({
           : "text-ink-soft hover:bg-paper-raised hover:text-flame",
       )}
     >
-      {Icon && <Icon className="h-3.5 w-3.5" />}
+      {icon}
       {label}
       {!!badge && (
         <span className="bg-flame text-paper-raised flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-mono text-[10px]">
