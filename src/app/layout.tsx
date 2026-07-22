@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/constants";
+import { ThemeProvider } from "@/components/layout/theme-provider";
 
 // Font tự lưu trữ (self-hosted qua Fontsource) — không phụ thuộc gọi mạng
 // tới Google Fonts lúc build/runtime, giúp tải nhanh và ổn định hơn khi
@@ -38,7 +39,14 @@ export default function RootLayout({
   return (
     <html lang="vi" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body className="bg-paper font-body text-ink min-h-screen antialiased">
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

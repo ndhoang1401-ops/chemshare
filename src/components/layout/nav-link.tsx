@@ -44,7 +44,7 @@ export function NavLink({
       {icon}
       {label}
       {!!badge && (
-        <span className="bg-flame text-paper-raised flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-mono text-[10px]">
+        <span className="bg-flame text-on-flame flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-mono text-[10px]">
           {badge}
         </span>
       )}

@@ -119,7 +119,7 @@ function CategoryChip({
       className={cn(
         "rounded-[var(--radius-tile)] border px-2.5 py-1 text-xs transition-colors",
         active
-          ? "border-flame bg-flame text-paper-raised"
+          ? "border-flame bg-flame text-on-flame"
           : "border-line text-ink-soft hover:border-flame hover:text-flame",
       )}
     >

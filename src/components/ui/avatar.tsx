@@ -23,7 +23,7 @@ function getInitials(name: string) {
 
 export function Avatar({ src, name, size = "md", className }: AvatarProps) {
   const base = cn(
-    "flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-flame font-display font-semibold text-paper-raised",
+    "flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-flame font-display font-semibold text-on-flame",
     SIZE_CLASSES[size],
     className,
   );

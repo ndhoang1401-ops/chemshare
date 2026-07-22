@@ -265,10 +265,34 @@ shadow/hiệu ứng hover-lift cho mọi loại card trong site (tài liệu, ch
 mục, tiện ích). Việc nâng cấp UI/UX toàn diện hơn (responsive rà soát kỹ,
 dark mode, tối ưu tốc độ) vẫn nằm ở Giai đoạn 11 như kế hoạch.
 
-## ⬜ Giai đoạn 11 — UI/UX hoàn thiện
+## ✅ Giai đoạn 11 — UI/UX hoàn thiện (hoàn tất)
 
-- Toggle dark/light mode (next-themes), responsive rà soát lại toàn site,
-  tối ưu tốc độ tải
+- [x] **Dark/light mode**: `next-themes` (bản 0.4.6, hỗ trợ React 19 chính
+      thức), `components/layout/theme-provider.tsx` bọc ở root layout,
+      `components/layout/theme-toggle.tsx` (bấm để đổi sáng/tối/theo hệ
+      thống) — thêm vào cả 4 layout (công khai, dashboard, admin, auth).
+      Vì toàn bộ site đã dùng CSS variable cho màu từ Giai đoạn 0 (không
+      phải `dark:` prefix rải rác), chỉ cần bật class `.dark` trên `<html>`
+      là toàn site tự đổi màu đúng, không phải sửa từng component
+- [x] **Bug phát hiện khi rà lại cho dark mode:** `text-paper-raised` bị
+      dùng sai chỗ để tạo "chữ trắng trên nền flame" (logo, nút, badge...)
+      — nhưng `paper-raised` đảo cực ở dark mode (từ trắng thành màu tối,
+      đúng nghĩa "bề mặt card"), khiến chữ mất tương phản khi bật dark
+      mode. Đã tách riêng token `--color-on-flame` (tính contrast riêng
+      cho từng mode, không phụ thuộc paper-raised) và sửa lại 14 chỗ
+      dùng sai trên 12 file
+- [x] **Bug phát hiện khi rà lại (không liên quan dark mode):** file
+      `molar-mass-calculator.tsx` bị lệch cấu trúc thẻ JSX (thiếu 1 thẻ
+      đóng) từ trước đó — chặn build hoàn toàn, đã viết lại đúng
+- [x] Responsive: ẩn bớt nút "Đăng tài liệu" ở header trên màn hình rất
+      nhỏ (tránh chật chội), bù lại bằng link trong nav phụ mobile; rà
+      lại các grid nhiều cột trong form (upload, quản lý danh mục) — đều
+      đã có breakpoint đúng, tự xếp 1 cột trên mobile
+- [x] Tối ưu tốc độ cảm nhận: `components/ui/skeleton.tsx` +
+      `loading.tsx` cho 5 trang truy vấn dữ liệu nặng nhất (trang chủ,
+      tìm kiếm, chi tiết tài liệu, hồ sơ, dashboard admin) — Next.js tự
+      hiện skeleton ngay lập tức trong lúc chờ dữ liệu thay vì màn hình
+      trắng
 
 ## ⬜ Giai đoạn 12 — Bảo mật
 

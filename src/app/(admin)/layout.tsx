@@ -5,6 +5,7 @@ import { ROLE_LABELS, SITE_NAME, USER_ROLES } from "@/lib/constants";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { NavLink } from "@/components/layout/nav-link";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import {
   LayoutDashboard,
   ClipboardCheck,
@@ -36,7 +37,7 @@ export default async function AdminLayout({
       <header className="border-line bg-paper/90 sticky top-0 z-10 border-b backdrop-blur-sm">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
           <Link href="/" className="flex items-center gap-2">
-            <div className="border-line bg-flame text-paper-raised flex h-8 w-8 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
+            <div className="border-line bg-flame text-on-flame flex h-8 w-8 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
               <span className="font-display text-sm leading-none font-semibold">
                 Nt
               </span>
@@ -47,6 +48,7 @@ export default async function AdminLayout({
           </Link>
 
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <Avatar
               src={session.user.image}
               name={session.user.name ?? session.user.email ?? "?"}

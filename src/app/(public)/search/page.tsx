@@ -90,7 +90,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                   className={cn(
                     "flex h-8 w-8 items-center justify-center rounded-[var(--radius-tile)] border text-sm",
                     p === page
-                      ? "border-flame bg-flame text-paper-raised"
+                      ? "border-flame bg-flame text-on-flame"
                       : "border-line text-ink-soft hover:border-flame hover:text-flame",
                   )}
                 >

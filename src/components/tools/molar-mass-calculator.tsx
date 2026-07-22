@@ -114,37 +114,41 @@ export function MolarMassCalculator() {
             <span className="text-ink-soft text-lg">g/mol</span>
           </p>
 
-          <table className="mt-5 w-full text-sm">
-            <thead>
-              <tr className="border-line text-ink-soft border-b text-left text-xs">
-                <th className="pb-2 font-mono font-normal">Nguyên tố</th>
-                <th className="pb-2 font-mono font-normal">Số lượng</th>
-                <th className="pb-2 font-mono font-normal">Khối lượng NT</th>
-                <th className="pb-2 font-mono font-normal">Thành phần</th>
-                <th className="pb-2 font-mono font-normal">Tỉ lệ %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.breakdown.map((row) => (
-                <tr key={row.symbol} className="border-line/50 border-b">
-                  <td className="text-ink py-2">
-                    {row.symbol}{" "}
-                    <span className="text-ink-soft">({row.nameVi})</span>
-                  </td>
-                  <td className="text-ink-soft py-2 font-mono">×{row.count}</td>
-                  <td className="text-ink-soft py-2 font-mono">
-                    {row.atomicMass}
-                  </td>
-                  <td className="text-ink py-2 font-mono">
-                    {row.subtotal} g/mol
-                  </td>
-                  <td className="text-ink-soft py-2 font-mono">
-                    {row.percentage}%
-                  </td>
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[480px] text-sm">
+              <thead>
+                <tr className="border-line text-ink-soft border-b text-left text-xs">
+                  <th className="pb-2 font-mono font-normal">Nguyên tố</th>
+                  <th className="pb-2 font-mono font-normal">Số lượng</th>
+                  <th className="pb-2 font-mono font-normal">Khối lượng NT</th>
+                  <th className="pb-2 font-mono font-normal">Thành phần</th>
+                  <th className="pb-2 font-mono font-normal">Tỉ lệ %</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {result.breakdown.map((row) => (
+                  <tr key={row.symbol} className="border-line/50 border-b">
+                    <td className="text-ink py-2">
+                      {row.symbol}{" "}
+                      <span className="text-ink-soft">({row.nameVi})</span>
+                    </td>
+                    <td className="text-ink-soft py-2 font-mono">
+                      ×{row.count}
+                    </td>
+                    <td className="text-ink-soft py-2 font-mono">
+                      {row.atomicMass}
+                    </td>
+                    <td className="text-ink py-2 font-mono">
+                      {row.subtotal} g/mol
+                    </td>
+                    <td className="text-ink-soft py-2 font-mono">
+                      {row.percentage}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

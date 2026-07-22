@@ -83,7 +83,7 @@ export default async function HomePage() {
               href={`/search?category=${category.slug}`}
               className="group border-line bg-paper-raised hover:border-flame flex items-center gap-3 rounded-[var(--radius-tile)] border p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
             >
-              <span className="bg-flame text-paper-raised flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-[var(--radius-tile)]">
+              <span className="bg-flame text-on-flame flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-[var(--radius-tile)]">
                 <span className="font-mono text-[8px] leading-none opacity-80">
                   {countByCategoryId.get(category.id) ?? 0}
                 </span>

@@ -7,7 +7,7 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-flame text-paper-raised hover:bg-flame-strong",
+        primary: "bg-flame text-on-flame hover:bg-flame-strong",
         outline:
           "border border-line bg-transparent text-ink hover:border-flame hover:text-flame",
         ghost: "text-ink hover:bg-paper-raised",

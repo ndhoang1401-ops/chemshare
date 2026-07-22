@@ -24,6 +24,12 @@
   --color-amber: #c97a2b; /* cam natri — trạng thái "chờ duyệt" */
   --color-alert: #b23a48; /* đỏ quỳ tím — lỗi, từ chối */
   --color-success: #2f7d4f; /* xanh lá — đã duyệt */
+  /* Màu chữ đặt TRÊN nền flame (logo, nút, badge...) — tách riêng khỏi
+     paper-raised vì 2 khái niệm khác nhau: paper-raised là màu bề mặt
+     card (đảo cực ở dark mode để tạo độ nổi), còn on-flame luôn cần đủ
+     tương phản với chính màu flame ở TỪNG mode (flame sáng hơn ở dark
+     mode nên on-flame phải tối hơn, không thể suy ra từ paper-raised). */
+  --color-on-flame: #f5faf8;
 
   --font-display: "Source Serif 4", ui-serif, Georgia, serif;
   --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
@@ -45,6 +51,8 @@
   --color-amber: #e0a055;
   --color-alert: #e17681;
   --color-success: #5cbd85;
+  /* flame sáng hơn nhiều ở dark mode -> chữ trên nó phải TỐI để đủ tương phản */
+  --color-on-flame: #0a1210;
 }
 
 @theme inline {
@@ -55,6 +63,7 @@
   --color-line: var(--color-line);
   --color-flame: var(--color-flame);
   --color-flame-strong: var(--color-flame-strong);
+  --color-on-flame: var(--color-on-flame);
   --color-cobalt: var(--color-cobalt);
   --color-amber: var(--color-amber);
   --color-alert: var(--color-alert);

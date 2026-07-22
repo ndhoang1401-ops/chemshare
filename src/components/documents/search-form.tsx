@@ -67,7 +67,7 @@ export function SearchForm({
 
         <button
           type="submit"
-          className="bg-flame text-paper-raised hover:bg-flame-strong ml-auto rounded-[var(--radius-tile)] px-4 py-2 text-sm font-medium transition-colors"
+          className="bg-flame text-on-flame hover:bg-flame-strong ml-auto rounded-[var(--radius-tile)] px-4 py-2 text-sm font-medium transition-colors"
         >
           Tìm kiếm
         </button>

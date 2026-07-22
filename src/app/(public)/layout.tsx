@@ -3,7 +3,9 @@ import { auth } from "@/auth";
 import { ROLE_LABELS, SITE_NAME, SITE_TAGLINE } from "@/lib/constants";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
   { href: "/search", label: "Tìm tài liệu" },
@@ -23,7 +25,7 @@ export default async function PublicLayout({
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 px-6 py-4">
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2">
-              <div className="border-line bg-flame text-paper-raised flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
+              <div className="border-line bg-flame text-on-flame flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
                 <span className="font-display text-sm leading-none font-semibold">
                   Nt
                 </span>
@@ -51,9 +53,13 @@ export default async function PublicLayout({
 
           {session?.user ? (
             <div className="flex items-center gap-3">
+              <ThemeToggle />
               <Link
                 href="/upload"
-                className={buttonVariants({ variant: "outline", size: "sm" })}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "hidden sm:inline-flex",
+                )}
               >
                 Đăng tài liệu
               </Link>
@@ -75,6 +81,7 @@ export default async function PublicLayout({
             </div>
           ) : (
             <div className="flex items-center gap-2">
+              <ThemeToggle />
               <Link
                 href="/login"
                 className={buttonVariants({ variant: "ghost", size: "sm" })}
@@ -99,6 +106,14 @@ export default async function PublicLayout({
                 {link.label}
               </Link>
             ))}
+            {session?.user && (
+              <Link
+                href="/upload"
+                className="text-ink-soft hover:text-flame text-sm sm:hidden"
+              >
+                Đăng tải
+              </Link>
+            )}
           </nav>
         </div>
       </header>
@@ -110,7 +125,7 @@ export default async function PublicLayout({
           <div className="grid gap-8 sm:grid-cols-3">
             <div>
               <div className="flex items-center gap-2">
-                <div className="border-line bg-flame text-paper-raised flex h-7 w-7 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
+                <div className="border-line bg-flame text-on-flame flex h-7 w-7 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
                   <span className="font-display text-xs leading-none font-semibold">
                     Nt
                   </span>

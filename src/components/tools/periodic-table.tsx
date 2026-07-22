@@ -88,7 +88,7 @@ export function PeriodicTable() {
                   backgroundColor: colorFor(element.category),
                 }}
                 className={cn(
-                  "text-paper-raised flex flex-col items-center justify-center rounded-[3px] p-0.5 transition-opacity",
+                  "flex flex-col items-center justify-center rounded-[3px] p-0.5 text-white transition-opacity",
                   dimmed && "opacity-20",
                   highlighted && "ring-ink ring-2 ring-offset-1",
                   selected?.number === element.number &&
@@ -127,7 +127,7 @@ function ElementDetail({
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-4">
           <div
-            className="text-paper-raised flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-[var(--radius-tile)]"
+            className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-[var(--radius-tile)] text-white"
             style={{ backgroundColor: colorFor(element.category) }}
           >
             <span className="font-mono text-[10px] leading-none opacity-80">
