@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { SITE_NAME, USER_ROLES } from "@/lib/constants";
+import { USER_ROLES } from "@/lib/constants";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { NavLink } from "@/components/layout/nav-link";
+import { Logo } from "@/components/layout/logo";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { User, Upload, Bell, ShieldCheck } from "lucide-react";
 
@@ -30,26 +31,19 @@ export default async function DashboardLayout({
     <div className="bg-paper min-h-screen">
       <header className="border-line bg-paper/90 sticky top-0 z-10 border-b backdrop-blur-sm">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-3">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="border-line bg-flame text-on-flame flex h-8 w-8 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
-              <span className="font-display text-sm leading-none font-semibold">
-                Nt
-              </span>
-            </div>
-            <span className="font-display text-ink hidden text-sm font-semibold sm:inline">
-              {SITE_NAME}
-            </span>
+          <Link href="/">
+            <Logo size="sm" />
           </Link>
 
           {session?.user && (
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 shrink-0 items-center gap-3">
               <ThemeToggle />
               <Avatar
                 src={session.user.image}
                 name={session.user.name ?? session.user.email ?? "?"}
                 size="sm"
               />
-              <span className="text-ink hidden text-sm sm:inline">
+              <span className="text-ink hidden max-w-[10rem] truncate text-sm sm:inline">
                 {session.user.name}
               </span>
               <LogoutButton />

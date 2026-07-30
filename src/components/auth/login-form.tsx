@@ -15,6 +15,10 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Email chưa được xác thực. Vui lòng kiểm tra hộp thư để xác thực trước khi đăng nhập.",
   account_suspended:
     "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.",
+  rate_limited:
+    "Bạn đăng nhập sai quá nhiều lần. Vui lòng đợi vài phút rồi thử lại.",
+  csrf_validation_failed:
+    "Yêu cầu bị từ chối do kiểm tra bảo mật. Vui lòng tải lại trang và thử lại.",
 };
 
 export function LoginForm() {

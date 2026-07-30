@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { auth } from "@/auth";
-import { ROLE_LABELS, SITE_NAME, SITE_TAGLINE } from "@/lib/constants";
+import { ROLE_LABELS, SITE_NAME } from "@/lib/constants";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { Logo } from "@/components/layout/logo";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -22,20 +23,10 @@ export default async function PublicLayout({
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-line bg-paper/90 sticky top-0 z-10 border-b backdrop-blur-sm">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 px-6 py-4">
-          <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="border-line bg-flame text-on-flame flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
-                <span className="font-display text-sm leading-none font-semibold">
-                  Nt
-                </span>
-              </div>
-              <div className="hidden sm:block">
-                <p className="font-display text-ink text-sm leading-none font-semibold">
-                  {SITE_NAME}
-                </p>
-                <p className="text-ink-soft text-xs">{SITE_TAGLINE}</p>
-              </div>
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
+          <div className="flex min-w-0 items-center gap-6">
+            <Link href="/" className="flex shrink-0 items-center gap-2">
+              <Logo size="sm" />
             </Link>
 
             <nav className="hidden items-center gap-5 md:flex">
@@ -43,7 +34,7 @@ export default async function PublicLayout({
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="text-ink-soft hover:text-flame text-sm transition-colors"
+                  className="text-ink-soft hover:text-flame text-sm whitespace-nowrap transition-colors"
                 >
                   {link.label}
                 </Link>
@@ -52,7 +43,7 @@ export default async function PublicLayout({
           </div>
 
           {session?.user ? (
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2">
               <ThemeToggle />
               <Link
                 href="/upload"
@@ -65,22 +56,24 @@ export default async function PublicLayout({
               </Link>
               <Link
                 href="/profile"
-                className="hidden items-center gap-2 text-sm hover:opacity-80 sm:flex"
+                className="hidden min-w-0 items-center gap-2 text-sm hover:opacity-80 sm:flex"
               >
                 <Avatar
                   src={session.user.image}
                   name={session.user.name ?? "?"}
                   size="sm"
                 />
-                <span className="text-ink">{session.user.name}</span>
-                <span className="text-ink-soft hidden lg:inline">
+                <span className="text-ink max-w-[10rem] truncate">
+                  {session.user.name}
+                </span>
+                <span className="text-ink-soft hidden whitespace-nowrap xl:inline">
                   · {ROLE_LABELS[session.user.role]}
                 </span>
               </Link>
               <LogoutButton />
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <ThemeToggle />
               <Link
                 href="/login"
@@ -96,12 +89,12 @@ export default async function PublicLayout({
         </div>
 
         <div className="border-line border-t px-6 py-2 md:hidden">
-          <nav className="mx-auto flex max-w-5xl items-center gap-4">
+          <nav className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-1">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-ink-soft hover:text-flame text-sm"
+                className="text-ink-soft hover:text-flame text-sm whitespace-nowrap"
               >
                 {link.label}
               </Link>
@@ -109,7 +102,7 @@ export default async function PublicLayout({
             {session?.user && (
               <Link
                 href="/upload"
-                className="text-ink-soft hover:text-flame text-sm sm:hidden"
+                className="text-ink-soft hover:text-flame text-sm whitespace-nowrap sm:hidden"
               >
                 Đăng tải
               </Link>
@@ -124,16 +117,7 @@ export default async function PublicLayout({
         <div className="mx-auto max-w-5xl px-6 py-8">
           <div className="grid gap-8 sm:grid-cols-3">
             <div>
-              <div className="flex items-center gap-2">
-                <div className="border-line bg-flame text-on-flame flex h-7 w-7 flex-col items-center justify-center rounded-[var(--radius-tile)] border">
-                  <span className="font-display text-xs leading-none font-semibold">
-                    Nt
-                  </span>
-                </div>
-                <span className="font-display text-ink text-sm font-semibold">
-                  {SITE_NAME}
-                </span>
-              </div>
+              <Logo size="sm" />
               <p className="text-ink-soft mt-3 text-xs leading-relaxed">
                 Nền tảng chia sẻ tài liệu Hóa học cho học sinh, sinh viên, giáo
                 viên và người tự học. Mọi tài liệu đều qua kiểm duyệt trước khi

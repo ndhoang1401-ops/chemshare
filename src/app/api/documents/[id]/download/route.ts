@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getDownloadUrl } from "@/lib/storage";
 import { USER_ROLES } from "@/lib/constants";
+import { rateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 const REVIEWER_ROLES: string[] = [USER_ROLES.MODERATOR, USER_ROLES.ADMIN];
 
@@ -13,6 +14,24 @@ export async function POST(
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const limited = rateLimit(
+    `download:${session.user.id}`,
+    RATE_LIMITS.download,
+  );
+  if (!limited.allowed) {
+    return NextResponse.json(
+      {
+        error: "rate_limited",
+        message: "Bạn tải xuống quá nhanh, vui lòng thử lại sau.",
+        retryAfterSeconds: limited.retryAfterSeconds,
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSeconds) },
+      },
+    );
   }
 
   const { id } = await params;

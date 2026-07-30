@@ -7,6 +7,7 @@ import { uploadFile } from "@/lib/storage";
 import { generateUniqueSlug } from "@/lib/slug";
 import { ACCEPTED_DOCUMENT_TYPES } from "@/lib/constants";
 import { parseKeywords, uploadDocumentSchema } from "@/lib/validators/document";
+import { rateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 const MAX_SIZE_BYTES =
   (Number(process.env.UPLOAD_MAX_SIZE_MB) || 25) * 1024 * 1024;
@@ -29,6 +30,25 @@ export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  // Khoá theo user (không theo IP) — chính xác hơn cho endpoint đã yêu
+  // cầu đăng nhập: nhiều người dùng sau cùng 1 NAT/IP công ty/trường học
+  // không bị ảnh hưởng lẫn nhau.
+  const limited = rateLimit(`upload:${session.user.id}`, RATE_LIMITS.upload);
+  if (!limited.allowed) {
+    return NextResponse.json(
+      {
+        error: "rate_limited",
+        message:
+          "Bạn đã đăng quá nhiều tài liệu trong thời gian ngắn, vui lòng thử lại sau.",
+        retryAfterSeconds: limited.retryAfterSeconds,
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSeconds) },
+      },
+    );
   }
 
   let formData: FormData;

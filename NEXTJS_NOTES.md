@@ -178,7 +178,7 @@ instance `NextAuth()` RIÊNG trong chính `proxy.ts`, chỉ dùng
 `auth.config.ts` (không có provider, không đụng Prisma/Argon2/nodemailer):
 
 ```ts
-// src/proxy.ts
+// src/proxy.ts (rút gọn — bản đầy đủ có thêm CSRF/rate limit, xem mục 12)
 import NextAuth from "next-auth";
 import { authConfig } from "@/auth.config";
 
@@ -197,3 +197,161 @@ native addon (argon2, sharp, bcrypt...), không SDK cần Node `fs`/network
 socket trực tiếp. Nếu cần thêm logic vào `authorized` callback mà logic
 đó cần các thứ trên, cân nhắc chuyển logic đó vào route handler/page thay
 vì proxy.
+
+## 12. `auth(callback)` vẫn chạy `authorized` callback trước — đọc source thật để xác nhận (Giai đoạn 12)
+
+Giai đoạn 12 cần thêm CSRF-check + rate-limit-đăng-nhập vào `proxy.ts`,
+nhưng logic phân quyền trang (mục 11, callback `authorized` trong
+`auth.config.ts`) không được đụng vào. Câu hỏi: nếu bọc thêm 1 callback
+tùy chỉnh qua `auth((request) => {...})`, callback `authorized` có còn
+chạy không, hay bị callback mới THAY THẾ hoàn toàn?
+
+Thay vì đoán, đã đọc thẳng `node_modules/next-auth/lib/index.js` (hàm
+`handleAuth`). Thứ tự thực thi thật:
+
+1. Callback `authorized` trong config LUÔN chạy trước tiên.
+2. Nếu `authorized` trả về **một `Response`** (vd. `NextResponse.redirect`
+   cho trang cần đăng nhập) → dùng thẳng `Response` đó, callback tùy
+   chỉnh truyền vào `auth(...)` **KHÔNG chạy** cho request này.
+3. Nếu `authorized` trả về **boolean `true`** → callback tùy chỉnh (nếu
+   có) **LUÔN được chạy**, với `request.auth` đã có sẵn session.
+4. Nếu `authorized` trả về `false` (không có callback tùy chỉnh) → tự
+   redirect sang trang đăng nhập như bình thường.
+
+Vì `PROTECTED_PREFIXES`/`ADMIN_PREFIX` trong `auth.config.ts` chỉ khớp
+đường dẫn TRANG (`/profile`, `/admin`, ...), không khớp `/api/...`, nên
+với mọi request `/api/**`, `authorized` luôn rơi vào nhánh (3) — callback
+CSRF/rate-limit trong `proxy.ts` chắc chắn chạy. Với trang cần đăng nhập
+mà chưa đăng nhập, rơi vào nhánh (2) — redirect chạy thẳng, không đụng
+callback mới (đúng ý muốn, vì CSRF/rate-limit chỉ cần cho API).
+
+**Pattern chuẩn khi cần vừa giữ `authorized`, vừa thêm logic riêng cho
+API:**
+
+```ts
+const { auth } = NextAuth(authConfig);
+
+export default auth((request: NextAuthRequest, event: NextFetchEvent) => {
+  // logic riêng — return undefined để đi tiếp (như NextResponse.next()),
+  // hoặc return NextResponse.json(...)/redirect(...) để chặn request.
+});
+```
+
+Type tham số PHẢI khai tường minh `(request: NextAuthRequest, event:
+NextFetchEvent)` — đủ 2 tham số đúng kiểu. Nếu chỉ viết 1 tham số hoặc
+để TS tự suy luận, TypeScript có 2 overload khớp cấu trúc cùng lúc
+(`AppRouteHandlerFn`-kiểu 2-tham-số và `NextAuthMiddleware`) và có thể
+chọn nhầm overload đầu tiên.
+
+→ Áp dụng ở **Giai đoạn 12** (`src/proxy.ts` — CSRF Origin/Host check +
+rate limit đăng nhập). Nếu Giai đoạn sau cần thêm logic proxy khác cho
+API routes, viết tiếp vào TRONG callback này, không tạo thêm lớp bọc mới.
+
+## 13. CSP (Content-Security-Policy) — `'unsafe-inline'`/`'unsafe-eval'` là bắt buộc, không phải cẩu thả (Giai đoạn 12)
+
+Trước khi chọn CSP, đã build + `next start`/`next dev` THẬT trên 1 project
+Next.js 16 tối giản riêng để soi HTML/JS render ra (không đoán mò):
+
+- **`next start` (production):** HTML render ra có ~5 thẻ `<script>`
+  KHÔNG có `src` — đây là payload RSC (`self.__next_f.push(...)`), nội
+  dung khác nhau mỗi request/trang nên không thể dùng CSP hash tĩnh.
+  KHÔNG có `nonce` trừ khi tự dựng cơ chế nonce qua proxy (Next.js chỉ tự
+  gắn nonce vào các script này nếu phát hiện pattern `nonce-...` trong
+  header CSP của chính response đó).
+- **`next dev` (Turbopack):** module runtime của Turbopack gọi thẳng
+  `eval(code)` để thực thi từng module (`_eval({code, url, map})` trong
+  chunk runtime, có comment `// eslint-disable-next-line no-eval` ngay
+  cạnh) — đây là cơ chế nạp module CỐT LÕI của Turbopack dev mode, không
+  phải rare edge case. React tự phát hiện `eval` bị chặn và in cảnh báo
+  đúng chữ *"React requires eval() in development mode..."* kèm gợi ý
+  thêm `unsafe-eval` — nhưng cũng xác nhận *"React will never use eval()
+  in production mode"*.
+
+**Hệ quả cho cấu hình CSP (`next.config.ts`):**
+
+- `script-src` bắt buộc có `'unsafe-inline'` (cả dev lẫn prod) — do RSC
+  payload script không nonce. Muốn bỏ `'unsafe-inline'` phải làm nonce
+  đầy đủ qua `proxy.ts`, nhưng cách đó **bắt buộc mọi trang dùng nonce
+  phải render dynamic** (không static/cache được nữa) — xung đột với
+  cache bằng `revalidateTag` đã cố tình làm ở Giai đoạn 5 và 8 (mục 4).
+  → Không làm nonce trừ khi có quyết định kiến trúc riêng, không lồng
+  vào việc "thêm security headers".
+- `script-src` cần thêm `'unsafe-eval'` **CHỈ ở dev** (`NODE_ENV !==
+  "production"`) — thiếu là `npm run dev` vỡ hoàn toàn (mọi module fail
+  load). Production không cần vì Turbopack build ra bundle thường, không
+  qua `eval`.
+- `connect-src` dev cần thêm `ws:` cho kết nối HMR
+  (`new WebSocket(...)`) — dù về lý thuyết `'self'` có thể đã bao gồm
+  `ws:` cùng host (theo CSP spec), vẫn khai rõ `ws:` cho chắc (không có
+  trình duyệt thật để test lại nhánh này, xem thêm bên dưới).
+- `style-src` thêm `'unsafe-inline'` vì `next-themes` (chống nhấp nháy
+  theme) tự tạo `<style>`/`<script>` bằng DOM API lúc runtime — có hỗ trợ
+  prop `nonce` nhưng project hiện không dùng nonce nên cứ để
+  `'unsafe-inline'`, rủi ro thấp hơn nhiều so với `script-src`.
+
+**Giới hạn của phần đã kiểm chứng:** sandbox này KHÔNG tải được Chromium
+(`playwright`/`puppeteer` cần tải binary từ domain ngoài allowlist mạng),
+nên phần trên chỉ xác nhận được qua HTML/JS THẬT lấy từ `curl`, không
+chạy được trong trình duyệt thật để xem console có còn cảnh báo CSP nào
+khác không (vd. lazy-loaded script tương lai). Nếu sau này có trình
+duyệt thật, nên bật DevTools → tab Console khi chạy `npm run dev` VÀ
+`npm run build && npm start` để xác nhận không còn "Refused to
+execute/connect..." nào trước khi siết CSP chặt hơn.
+
+→ Áp dụng ở **Giai đoạn 12** (`next.config.ts`). Nếu sau này cần CSP chặt
+hơn (bỏ `unsafe-inline` cho script), đọc kỹ mục này trước — đó là việc
+lớn hơn "thêm header", cần quyết định đánh đổi dynamic-rendering riêng.
+
+## 14. Bug thật đã sửa: chặn login (CSRF/rate-limit) làm vỡ `signIn()` phía client + `AUTH_URL` ghi đè `request.nextUrl` (Giai đoạn 12)
+
+**Triệu chứng người dùng báo:** bấm đăng nhập → crash toàn trang, lỗi
+`Failed to construct 'URL': Invalid URL` ném ra trong `signIn()`.
+
+**Nguyên nhân (xác nhận bằng cách đọc source thật
+`node_modules/next-auth/react.js`, không đoán mò):** `signIn()` phía
+client, khi gọi với `redirect: false` (đúng cách `LoginForm` dùng), LUÔN
+chạy:
+```js
+const error = new URL(data.url).searchParams.get("error") ?? undefined;
+```
+bất kể đăng nhập thành công hay thất bại — không có nhánh nào bỏ qua. Ở
+Giai đoạn 12, `proxy.ts` chặn request POST tới
+`/api/auth/callback/credentials` khi CSRF không khớp hoặc rate limit
+vượt ngưỡng, nhưng lúc đó trả về JSON dạng `{error, message}` (giống các
+route khác) — KHÔNG có field `url`. `new URL(undefined)` ném lỗi ngay
+trong `signIn()`, vỡ cả trang thay vì hiển thị lỗi bình thường qua
+`result.error`.
+
+**Cách phát hiện:** test bằng `curl` thật (server dev thật trong sandbox,
+không cần Prisma hoạt động vì proxy.ts không đụng Prisma) — gửi POST
+`/api/auth/callback/credentials` với `Origin` giả và với 9 lần liên tiếp
+để kích hoạt rate limit, xem đúng response JSON trả ra.
+
+**Cách sửa:** khi chặn CHÍNH endpoint `/api/auth/callback/credentials`
+(dù vì CSRF hay rate limit), trả về hình dạng next-auth mong đợi:
+`{ url: "<origin>/login?error=CredentialsSignin&code=..." }` thay vì
+`{error, message}` — xem hàm `credentialsCallbackBlockedResponse` trong
+`proxy.ts`. Các route khác (register, forgot-password, upload, download)
+KHÔNG cần đổi vì component gọi chúng tự đọc `data.message`/`data.error`
+một cách an toàn (có fallback), không tự ý `new URL()` như next-auth làm.
+
+**Phát hiện phụ (quan trọng cho Giai đoạn 13 — triển khai):** trong lúc
+debug, phát hiện `request.nextUrl.origin`/`request.url` bên trong
+`proxy.ts` **không phản ánh cổng/host thật của request đến**, mà phản
+ánh giá trị biến môi trường `AUTH_URL` đã cấu hình (đã test thật: đổi
+`AUTH_URL` sang cổng khác, `nextUrl.origin` đổi theo ngay, trong khi
+`request.headers.get("host")` vẫn luôn đúng cổng thật). Đây là hành vi
+CÓ CHỦ ĐÍCH của Auth.js (ưu tiên origin đã cấu hình/tin cậy hơn Host
+header có thể bị giả mạo) — không phải bug, và khớp với cách
+`auth.config.ts` (mục "authorized" callback, dùng
+`new URL(..., request.url)`) đã làm từ Giai đoạn 2.
+
+→ **Hệ quả cho Giai đoạn 13:** `AUTH_URL` trong `.env` production PHẢI
+khớp CHÍNH XÁC domain công khai thật (vd. `https://nguyento.dev`, không
+phải `http://localhost:3000` hay tên host nội bộ trong Docker network)
+— nếu không, MỌI redirect dựng từ `request.url`/`request.nextUrl` trong
+`proxy.ts` VÀ `auth.config.ts` (chuyển hướng sang `/login`, quay lại
+trang cũ sau đăng nhập...) sẽ trỏ sai domain một cách khó nhận ra (không
+lỗi rõ ràng, chỉ redirect nhầm chỗ). Việc so khớp CSRF (`lib/csrf.ts`)
+không bị ảnh hưởng vì nó đọc thẳng header `Host`/`X-Forwarded-Host`, không
+qua `nextUrl`.

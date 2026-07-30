@@ -9,8 +9,11 @@ export const updateProfileSchema = z.object({
     .max(280, "Giới thiệu tối đa 280 ký tự")
     .optional()
     .or(z.literal("")),
+  // Giai đoạn 12: chỉ chấp nhận scheme http/https — chặn javascript:,
+  // data:, file:, vbscript:... (đã test thật bằng zod v4.4.3, xem
+  // NEXTJS_NOTES.md).
   avatar: z
-    .url("Đường dẫn ảnh không hợp lệ")
+    .url({ protocol: /^https?$/, error: "Đường dẫn ảnh không hợp lệ" })
     .max(500)
     .optional()
     .or(z.literal("")),

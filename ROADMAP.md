@@ -294,9 +294,62 @@ dark mode, tối ưu tốc độ) vẫn nằm ở Giai đoạn 11 như kế ho�
       hiện skeleton ngay lập tức trong lúc chờ dữ liệu thay vì màn hình
       trắng
 
-## ⬜ Giai đoạn 12 — Bảo mật
+## ✅ Giai đoạn 12 — Bảo mật (hoàn tất phần code — cần chạy thật để xác nhận)
 
-- Rate limiting, chống XSS/CSRF/SQL Injection, rà soát lại toàn bộ upload
+- [x] **Rate limiting (in-memory)**: `lib/rate-limit.ts` — thuật toán
+      fixed window, dùng `globalThis` để sống sót qua hot-reload dev
+      (giống pattern `lib/prisma.ts`), có dọn rác định kỳ. Áp đúng 4 mục
+      yêu cầu + 1 mục bổ sung theo ghi chú để dành sẵn từ Giai đoạn 8:
+      - Đăng nhập: 8 lần / 5 phút / IP — áp trong `proxy.ts` (route do
+        next-auth tự sinh, không có `route.ts` riêng để chèn trực tiếp)
+      - Đăng ký: 5 lần / giờ / IP (`api/auth/register`)
+      - Quên mật khẩu: 5 lần / giờ / IP (`api/auth/forgot-password`)
+      - Upload: 20 lần / giờ / user (`api/documents`)
+      - Tải xuống (bổ sung — xem ghi chú "để dành cho Giai đoạn 12" ở
+        Giai đoạn 8 phía trên): 60 lần / 10 phút / user
+      - ⚠️ Nhận diện người dùng theo IP qua header `x-forwarded-for`/
+        `x-real-ip`. Nếu triển khai (Giai đoạn 13) KHÔNG đặt Next.js sau
+        reverse proxy (Nginx/Caddy) set các header này, rate limit rơi
+        về áp dụng CHUNG cho mọi người thay vì theo từng người
+- [x] **CSRF**: `lib/csrf.ts` so khớp header `Origin`/`Referer` với
+      `Host`/`X-Forwarded-Host` của chính request, áp cho mọi method
+      thay đổi state (POST/PUT/PATCH/DELETE) trên toàn bộ `/api/**` qua
+      `proxy.ts`. Đã đọc trực tiếp source `next-auth` để xác nhận cách
+      phối hợp đúng với callback `authorized` sẵn có (không giẫm lên
+      logic phân quyền trang) — xem NEXTJS_NOTES.md mục 12
+- [x] **Security headers** (`next.config.ts`): thêm CSP,
+      `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`,
+      `Permissions-Policy`, `Strict-Transport-Security`. CSP cho phép
+      `'unsafe-inline'` ở `script-src`/`style-src` — **bắt buộc, không
+      phải cẩu thả**: đã build + `next start`/`next dev` thật trên
+      project Next.js 16 riêng để xác nhận Next.js tự chèn script RSC
+      payload không nonce (prod) và Turbopack dùng `eval()` làm cơ chế
+      nạp module cốt lõi (dev) — thiếu `unsafe-inline`/`unsafe-eval` sẽ
+      vỡ hydration/`npm run dev` hoàn toàn. Chi tiết + hướng nâng cấp lên
+      CSP nonce (đánh đổi: bắt buộc dynamic rendering toàn site) xem
+      NEXTJS_NOTES.md mục 13
+- [x] **Giới hạn scheme URL avatar**: `lib/validators/profile.ts` dùng
+      `z.url({ protocol: /^https?$/ })` — chặn `javascript:`, `data:`,
+      `file:`, `ftp:`..., chỉ nhận `http`/`https`. Đã viết script test
+      thật bằng `npx tsx` xác nhận đúng hành vi với cả 2 scheme hợp lệ
+      lẫn các scheme cần chặn
+- [x] **Rà soát SQL Injection**: toàn bộ raw SQL (`lib/search.ts`, dùng
+      cho full-text search) đều qua tagged template parameterized
+      (`prisma.$queryRaw`); không có `$queryRawUnsafe`/`$executeRawUnsafe`
+      hay nối chuỗi SQL thủ công ở bất kỳ đâu trong `src/` — không phát
+      hiện lỗ hổng
+- [x] **Rà soát XSS**: không có `dangerouslySetInnerHTML` nào trong
+      `src/` — React tự escape output khi render, không có vector XSS rõ
+      ràng ở tầng hiển thị hiện tại
+- [ ] **Chưa test được bằng `npm run dev` thật với Postgres** (sandbox
+      không tải được Prisma engine — xem NEXTJS_NOTES.md mục 9). Cần bạn
+      chạy thật ở máy có mạng ngoài, đặc biệt kiểm tra:
+      - Đăng nhập sai liên tục >8 lần trong 5 phút có bị trả 429 không
+      - Dán link `javascript:alert(1)` vào avatar có bị từ chối không
+      - Giả lập request CSRF từ origin khác có bị chặn 403 không, vd.:
+        `curl -X POST http://localhost:3000/api/auth/forgot-password -H "Origin: http://evil.com" -H "Content-Type: application/json" -d '{"email":"a@b.com"}'`
+      - Devtools → Console khi chạy site có báo lỗi CSP nào không
+        (`Refused to execute/connect...`)
 
 ## ⬜ Giai đoạn 13 — Đóng gói & triển khai
 

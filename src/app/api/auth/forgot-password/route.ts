@@ -3,8 +3,28 @@ import { prisma } from "@/lib/prisma";
 import { forgotPasswordSchema } from "@/lib/validators/auth";
 import { createVerificationToken } from "@/lib/tokens";
 import { sendMail, buildPasswordResetEmail } from "@/lib/email";
+import { getClientIp, rateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  const limited = rateLimit(
+    `forgot-password:${ip}`,
+    RATE_LIMITS.forgotPassword,
+  );
+  if (!limited.allowed) {
+    return NextResponse.json(
+      {
+        error: "rate_limited",
+        message: "Bạn đã yêu cầu quá nhiều lần, vui lòng thử lại sau.",
+        retryAfterSeconds: limited.retryAfterSeconds,
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSeconds) },
+      },
+    );
+  }
+
   const body = await request.json().catch(() => null);
   const parsed = forgotPasswordSchema.safeParse(body);
 
