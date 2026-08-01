@@ -355,3 +355,64 @@ trang cũ sau đăng nhập...) sẽ trỏ sai domain một cách khó nhận ra
 lỗi rõ ràng, chỉ redirect nhầm chỗ). Việc so khớp CSRF (`lib/csrf.ts`)
 không bị ảnh hưởng vì nó đọc thẳng header `Host`/`X-Forwarded-Host`, không
 qua `nextUrl`.
+
+## 15. Docker `output: "standalone"` + Prisma driver adapter — cách phối hợp đúng (Giai đoạn 13)
+
+Đã fetch trực tiếp Dockerfile mẫu mới nhất từ chính repo Next.js
+(`github.com/vercel/next.js/tree/canary/examples/with-docker` — không
+dùng lại từ trí nhớ vì mẫu này có thể đổi giữa các version) rồi chỉnh 2
+chỗ riêng cho project:
+
+1. **`prisma generate` phải chạy TRƯỚC `next build`** trong stage
+   `builder` — code import type từ `@prisma/client`, thiếu bước này
+   `next build` lỗi type-check ngay (đã tự gặp lỗi y hệt suốt project vì
+   sandbox không chạy được `prisma generate`, xem mục 9 — trong Docker
+   build thật thì có mạng, chạy bình thường).
+2. `prisma generate` cần `DATABASE_URL` có giá trị (dù không kết nối
+   thật) vì `prisma.config.ts` gọi `env("DATABASE_URL")` — Dockerfile
+   dùng 1 giá trị GIẢ làm build `ARG` chỉ để bước này qua được;
+   `DATABASE_URL` THẬT truyền lúc `docker compose up` (runtime, qua
+   `.env.production`), không phải lúc build image.
+
+**Điểm hay của Prisma 7 + driver adapter (không phải binary engine
+truyền thống) trong bối cảnh Docker:** `next.config.ts` đã có
+`serverExternalPackages: ["@prisma/client", "pg"]` từ trước (Giai đoạn
+0/1, lý do gốc là tránh Turbopack cố bundle native binding lúc dev) — hoá
+ra cấu hình NÀY cũng chính là thứ đảm bảo `output: "standalone"` copy
+đúng toàn bộ package `@prisma/client` đã generate (kể cả file nào nó cần)
+vào `.next/standalone` thay vì thử tự phân tích/bundle rồi bỏ sót — không
+cần thêm `outputFileTracingIncludes` thủ công như tài liệu Next.js gợi ý
+cho các package native khác (`sharp`, `aws-crt`...).
+
+**Phát hiện khác lúc rà lại trước khi viết Dockerfile:** `sharp` — package
+bắt buộc để `next/image` optimize ảnh lúc production (không phải lúc
+`next dev`, lúc dev Next.js tự dùng cách khác) — **chưa có trong
+`package.json`** dù project đã dùng `next/image` (component `Logo`, thêm
+ở phần sửa giao diện cùng Giai đoạn 12). Thiếu `sharp` không làm build
+lỗi, nhưng `next start`/production sẽ log warning và ảnh không được tối
+ưu (nặng hơn, chậm hơn). Đã thêm vào `dependencies`.
+
+→ Đã build thử thật bằng `npm run build` sau khi thêm `output:
+"standalone"` — compile/bundle qua trót lọt (37s), chỉ dừng ở lỗi
+type-check Prisma đã biết trước, xác nhận `output: "standalone"` tự nó
+không gây lỗi gì mới.
+
+## 16. Rate limiting theo IP cần reverse proxy set `X-Forwarded-For` — không tự có khi chạy qua Docker (Giai đoạn 12/13)
+
+Nhắc lại rõ hơn từ comment trong `lib/rate-limit.ts` (mục "getClientIp"):
+`docker-compose.yml` ở Giai đoạn 13 chạy Next.js **trực tiếp** trong
+container, expose thẳng cổng 3000 — KHÔNG có reverse proxy nào ở giữa
+tự đặt header `X-Forwarded-For`. Nghĩa là ngay sau khi deploy bằng
+`docker-compose.yml` này (chưa thêm Nginx/Caddy phía trước), rate limit
+đăng nhập/đăng ký/quên mật khẩu (Giai đoạn 12) áp dụng CHUNG cho MỌI
+người dùng thay vì theo từng IP — vẫn chặn được spam hàng loạt, nhưng 1
+người dùng ác ý vẫn có thể vô tình làm rate-limit "dùng hết" cho người
+khác dùng chung.
+
+→ Muốn rate-limit đúng theo từng IP: đặt Nginx/Caddy/Cloudflare trước
+container `app`, cấu hình set header `X-Forwarded-For` (Nginx:
+`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`), rồi trỏ
+domain qua reverse proxy đó thay vì thẳng cổng 3000. Việc thêm reverse
+proxy nằm NGOÀI phạm vi Giai đoạn 13 (chỉ yêu cầu Dockerfile +
+docker-compose.yml + README) — cố tình để lại làm việc riêng nếu cần,
+tránh đoán sai domain/chứng chỉ TLS của người triển khai.

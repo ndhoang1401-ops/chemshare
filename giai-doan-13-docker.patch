@@ -1,0 +1,617 @@
+diff --git a/.dockerignore b/.dockerignore
+new file mode 100644
+index 0000000..266bdc2
+--- /dev/null
++++ b/.dockerignore
+@@ -0,0 +1,35 @@
++# Next.js build output (build lại từ đầu trong container)
++.next/
++out/
++
++# node_modules cài lại trong container, không copy từ máy host
++node_modules/
++
++# Biến môi trường thật — KHÔNG BAO GIỜ đưa vào image. Giá trị thật truyền
++# qua docker-compose.yml (env_file/environment) lúc container chạy.
++.env
++.env*.local
++
++# Git, IDE, log
++.git/
++.gitignore
++.vscode/
++.idea/
++*.log
++npm-debug.log*
++
++# Test, docs không cần trong image production
++coverage/
++*.test.*
++*.spec.*
++
++# File Docker chính nó không cần copy vào build context của chính nó
++Dockerfile*
++.dockerignore
++docker-compose*.yml
++
++# Markdown — trừ README (không ảnh hưởng runtime nhưng đỡ rác image)
++ROADMAP.md
++NEXTJS_NOTES.md
++CLAUDE.md
++AGENTS.md
+diff --git a/.env.production.example b/.env.production.example
+new file mode 100644
+index 0000000..28f9f53
+--- /dev/null
++++ b/.env.production.example
+@@ -0,0 +1,64 @@
++# ─────────────────────────────────────────────────────────────
++# Nguyên Tố — Biến môi trường cho PRODUCTION (docker-compose.yml)
++#
++# Khác với .env.example (dùng cho `npm run dev` chạy trực tiếp trên máy
++# bạn) — file này dùng khi chạy TOÀN BỘ stack bằng Docker.
++#
++# Cách dùng:
++#   cp .env.production.example .env.production
++#   # điền giá trị thật vào .env.production
++#   docker compose --env-file .env.production up -d --build
++#
++# .env.production KHÔNG được commit lên git (đã có trong .gitignore,
++# cùng nhóm với .env).
++# ─────────────────────────────────────────────────────────────
++
++# --- Database ---
++# 3 biến này dựng nên DATABASE_URL thật bên trong docker-compose.yml (trỏ
++# vào service "db" nội bộ, không phải localhost) — không cần tự khai
++# DATABASE_URL ở đây.
++POSTGRES_USER=chemshare
++POSTGRES_PASSWORD=doi-thanh-mat-khau-manh-that-o-day
++POSTGRES_DB=chemshare
++
++# --- Auth — NextAuth/Auth.js ---
++# Tạo bằng lệnh: openssl rand -base64 32
++AUTH_SECRET=
++# QUAN TRỌNG: phải khớp CHÍNH XÁC domain công khai thật (vd.
++# https://nguyento.dev) — không phải localhost, không phải tên service
++# nội bộ Docker. Auth.js dùng giá trị này làm nguồn "origin đáng tin" cho
++# mọi redirect (đăng nhập xong quay lại trang cũ...); đặt sai domain thì
++# redirect sẽ âm thầm trỏ nhầm chỗ. Xem NEXTJS_NOTES.md mục 14.
++AUTH_URL=https://your-real-domain.com
++APP_URL=https://your-real-domain.com
++
++# --- Email — xác thực tài khoản & quên mật khẩu ---
++EMAIL_SERVER_HOST=smtp.example.com
++EMAIL_SERVER_PORT=587
++EMAIL_SERVER_USER=
++EMAIL_SERVER_PASSWORD=
++EMAIL_FROM="Nguyên Tố <no-reply@example.com>"
++
++# --- Lưu trữ file — Cloudflare R2 hoặc AWS S3 ---
++# TÙY CHỌN: để trống cả 4 dòng STORAGE_* bên dưới, hệ thống tự lưu file
++# vào volume Docker "chemshare_storage_local" (đã khai sẵn trong
++# docker-compose.yml). Muốn dùng cloud thì điền đủ, không cần sửa code.
++STORAGE_PROVIDER=
++STORAGE_ENDPOINT=
++STORAGE_REGION=auto
++STORAGE_BUCKET=chemshare-documents
++STORAGE_ACCESS_KEY_ID=
++STORAGE_SECRET_ACCESS_KEY=
++STORAGE_PUBLIC_URL=
++
++# --- Giới hạn upload ---
++UPLOAD_MAX_SIZE_MB=25
++
++# --- Rate limiting ---
++# Lưu ý: docker-compose.yml chạy Next.js trực tiếp trong container, KHÔNG
++# tự có reverse proxy phía trước → rate limit theo IP (lib/rate-limit.ts)
++# sẽ áp dụng CHUNG cho mọi người thay vì theo từng người, TRỪ KHI bạn đặt
++# thêm Nginx/Caddy/Cloudflare trước container này và nó set đúng header
++# X-Forwarded-For. Xem NEXTJS_NOTES.md mục 14 và 16.
++RATE_LIMIT_WINDOW_SECONDS=60
++RATE_LIMIT_MAX_REQUESTS=30
+diff --git a/.gitignore b/.gitignore
+index 6487282..6b6ed31 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -33,6 +33,7 @@ yarn-error.log*
+ # env files (can opt-in for committing if needed)
+ .env*
+ !.env.example
++!.env.production.example
+ 
+ # vercel
+ .vercel
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+index 0000000..23e8da2
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,95 @@
++# syntax=docker.io/docker/dockerfile:1
++#
++# Dockerfile production cho "Nguyên Tố" — 3 giai đoạn (deps/builder/
++# runner), dựa theo mẫu chính thức của Next.js team
++# (github.com/vercel/next.js/tree/canary/examples/with-docker), chỉnh lại
++# 2 chỗ riêng cho project này:
++#   1. Thêm bước `prisma generate` trước `next build` (bắt buộc — code
++#      import types từ @prisma/client, thiếu bước này build sẽ lỗi ngay).
++#   2. Dùng DATABASE_URL giả (build ARG) chỉ để `prisma generate` chạy
++#      được — lệnh này KHÔNG kết nối database thật, chỉ đọc schema. Giá
++#      trị DATABASE_URL THẬT truyền lúc `docker compose up` (runtime),
++#      không phải lúc build image. Xem NEXTJS_NOTES.md mục 15 để biết vì
++#      sao cần tách 2 việc build-time/run-time này.
++#
++# Node 22 (không dùng bản 24 mới hơn trong mẫu chính thức) vì toàn bộ dự
++# án từ Giai đoạn 0 đã phát triển/test trên Node 22 — build production
++# nên khớp đúng version đã kiểm chứng, tránh lệch hành vi khó lường.
++
++ARG NODE_VERSION=22-slim
++
++# ============================================
++# Giai đoạn 1: cài dependencies
++# ============================================
++FROM node:${NODE_VERSION} AS dependencies
++WORKDIR /app
++
++COPY package.json package-lock.json* ./
++RUN --mount=type=cache,target=/root/.npm \
++    npm ci --no-audit --no-fund
++
++# ============================================
++# Giai đoạn 2: build (prisma generate + next build)
++# ============================================
++FROM node:${NODE_VERSION} AS builder
++WORKDIR /app
++
++COPY --from=dependencies /app/node_modules ./node_modules
++COPY . .
++
++ENV NODE_ENV=production
++# Chỉ dùng để `prisma generate` chạy qua bước validate config — không
++# kết nối thật, không cần đúng cú pháp Postgres thật.
++ARG DATABASE_URL="postgresql://build:build@localhost:5432/build"
++ENV DATABASE_URL=${DATABASE_URL}
++
++RUN npx prisma generate
++
++# next.config.ts có `output: "standalone"` — build ra .next/standalone
++# chỉ chứa file thật sự cần cho runtime.
++RUN npm run build
++
++# ============================================
++# Giai đoạn 3: chạy ứng dụng (image cuối, gọn nhẹ)
++# ============================================
++FROM node:${NODE_VERSION} AS runner
++WORKDIR /app
++
++ENV NODE_ENV=production
++ENV PORT=3000
++ENV HOSTNAME="0.0.0.0"
++
++# Ảnh base "slim" thiếu curl — dùng cho healthcheck trong
++# docker-compose.yml.
++RUN apt-get update && apt-get install -y --no-install-recommends curl \
++    && rm -rf /var/lib/apt/lists/*
++
++COPY --from=builder --chown=node:node /app/public ./public
++
++RUN mkdir .next && chown node:node .next
++
++# Thư mục lưu file cục bộ khi STORAGE_PROVIDER để trống (xem
++# lib/storage.ts) — tạo sẵn + đúng quyền cho user "node" (không phải
++# root) TRƯỚC KHI docker-compose.yml mount volume vào đây. Docker giữ lại
++# quyền thư mục có sẵn trong image khi mount volume named rỗng đè lên —
++# thiếu bước này sẽ lỗi "permission denied" khi app cố ghi file.
++RUN mkdir storage-local && chown node:node storage-local
++
++# output: standalone tự trace + gom đúng node_modules cần thiết (bao gồm
++# cả @prisma/client đã generate ở bước trên, vì next.config.ts có khai
++# serverExternalPackages: ["@prisma/client", "pg"] — Next.js biết phải
++# copy nguyên 2 package này thay vì cố bundle).
++COPY --from=builder --chown=node:node /app/.next/standalone ./
++COPY --from=builder --chown=node:node /app/.next/static ./.next/static
++
++# Prisma migrate deploy (chạy ở service "migrate" riêng trong
++# docker-compose.yml, KHÔNG tự chạy trong image này) cần Prisma CLI đầy
++# đủ (devDependency, không có trong .next/standalone) — service đó build
++# tới stage `builder` ở trên, không dùng stage `runner` này. Xem
++# docker-compose.yml.
++
++USER node
++
++EXPOSE 3000
++
++CMD ["node", "server.js"]
+diff --git a/NEXTJS_NOTES.md b/NEXTJS_NOTES.md
+index 6078c1b..5f73914 100644
+--- a/NEXTJS_NOTES.md
++++ b/NEXTJS_NOTES.md
+@@ -355,3 +355,64 @@ trang cũ sau đăng nhập...) sẽ trỏ sai domain một cách khó nhận ra
+ lỗi rõ ràng, chỉ redirect nhầm chỗ). Việc so khớp CSRF (`lib/csrf.ts`)
+ không bị ảnh hưởng vì nó đọc thẳng header `Host`/`X-Forwarded-Host`, không
+ qua `nextUrl`.
++
++## 15. Docker `output: "standalone"` + Prisma driver adapter — cách phối hợp đúng (Giai đoạn 13)
++
++Đã fetch trực tiếp Dockerfile mẫu mới nhất từ chính repo Next.js
++(`github.com/vercel/next.js/tree/canary/examples/with-docker` — không
++dùng lại từ trí nhớ vì mẫu này có thể đổi giữa các version) rồi chỉnh 2
++chỗ riêng cho project:
++
++1. **`prisma generate` phải chạy TRƯỚC `next build`** trong stage
++   `builder` — code import type từ `@prisma/client`, thiếu bước này
++   `next build` lỗi type-check ngay (đã tự gặp lỗi y hệt suốt project vì
++   sandbox không chạy được `prisma generate`, xem mục 9 — trong Docker
++   build thật thì có mạng, chạy bình thường).
++2. `prisma generate` cần `DATABASE_URL` có giá trị (dù không kết nối
++   thật) vì `prisma.config.ts` gọi `env("DATABASE_URL")` — Dockerfile
++   dùng 1 giá trị GIẢ làm build `ARG` chỉ để bước này qua được;
++   `DATABASE_URL` THẬT truyền lúc `docker compose up` (runtime, qua
++   `.env.production`), không phải lúc build image.
++
++**Điểm hay của Prisma 7 + driver adapter (không phải binary engine
++truyền thống) trong bối cảnh Docker:** `next.config.ts` đã có
++`serverExternalPackages: ["@prisma/client", "pg"]` từ trước (Giai đoạn
++0/1, lý do gốc là tránh Turbopack cố bundle native binding lúc dev) — hoá
++ra cấu hình NÀY cũng chính là thứ đảm bảo `output: "standalone"` copy
++đúng toàn bộ package `@prisma/client` đã generate (kể cả file nào nó cần)
++vào `.next/standalone` thay vì thử tự phân tích/bundle rồi bỏ sót — không
++cần thêm `outputFileTracingIncludes` thủ công như tài liệu Next.js gợi ý
++cho các package native khác (`sharp`, `aws-crt`...).
++
++**Phát hiện khác lúc rà lại trước khi viết Dockerfile:** `sharp` — package
++bắt buộc để `next/image` optimize ảnh lúc production (không phải lúc
++`next dev`, lúc dev Next.js tự dùng cách khác) — **chưa có trong
++`package.json`** dù project đã dùng `next/image` (component `Logo`, thêm
++ở phần sửa giao diện cùng Giai đoạn 12). Thiếu `sharp` không làm build
++lỗi, nhưng `next start`/production sẽ log warning và ảnh không được tối
++ưu (nặng hơn, chậm hơn). Đã thêm vào `dependencies`.
++
++→ Đã build thử thật bằng `npm run build` sau khi thêm `output:
++"standalone"` — compile/bundle qua trót lọt (37s), chỉ dừng ở lỗi
++type-check Prisma đã biết trước, xác nhận `output: "standalone"` tự nó
++không gây lỗi gì mới.
++
++## 16. Rate limiting theo IP cần reverse proxy set `X-Forwarded-For` — không tự có khi chạy qua Docker (Giai đoạn 12/13)
++
++Nhắc lại rõ hơn từ comment trong `lib/rate-limit.ts` (mục "getClientIp"):
++`docker-compose.yml` ở Giai đoạn 13 chạy Next.js **trực tiếp** trong
++container, expose thẳng cổng 3000 — KHÔNG có reverse proxy nào ở giữa
++tự đặt header `X-Forwarded-For`. Nghĩa là ngay sau khi deploy bằng
++`docker-compose.yml` này (chưa thêm Nginx/Caddy phía trước), rate limit
++đăng nhập/đăng ký/quên mật khẩu (Giai đoạn 12) áp dụng CHUNG cho MỌI
++người dùng thay vì theo từng IP — vẫn chặn được spam hàng loạt, nhưng 1
++người dùng ác ý vẫn có thể vô tình làm rate-limit "dùng hết" cho người
++khác dùng chung.
++
++→ Muốn rate-limit đúng theo từng IP: đặt Nginx/Caddy/Cloudflare trước
++container `app`, cấu hình set header `X-Forwarded-For` (Nginx:
++`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`), rồi trỏ
++domain qua reverse proxy đó thay vì thẳng cổng 3000. Việc thêm reverse
++proxy nằm NGOÀI phạm vi Giai đoạn 13 (chỉ yêu cầu Dockerfile +
++docker-compose.yml + README) — cố tình để lại làm việc riêng nếu cần,
++tránh đoán sai domain/chứng chỉ TLS của người triển khai.
+diff --git a/README.md b/README.md
+index 5216ed3..e4e202d 100644
+--- a/README.md
++++ b/README.md
+@@ -95,6 +95,79 @@ thay vì R2/S3 thật. Test được toàn bộ luồng đăng tải/tải xuố
+ nào deploy thật hoặc muốn dùng cloud, điền đủ 4 biến đó vào `.env` là tự
+ chuyển sang R2/S3, không cần sửa code gì thêm.
+ 
++## Triển khai (production)
++
++Yêu cầu: máy chủ có Docker + Docker Compose plugin, domain trỏ về máy chủ đó
++(hoặc ít nhất một địa chỉ IP truy cập được).
++
++```bash
++# 1. Lấy code về máy chủ (git clone hoặc kéo file lên)
++
++# 2. Tạo file biến môi trường production
++cp .env.production.example .env.production
++```
++
++Mở `.env.production` và điền giá trị thật — **bắt buộc** ít nhất 3 dòng
++sau, thiếu là container sẽ không khởi động được (có kiểm tra sẵn):
++
++- `POSTGRES_PASSWORD` — đặt mật khẩu mạnh, đừng để trống hay dùng giá trị
++  mẫu
++- `AUTH_SECRET` — tạo bằng `openssl rand -base64 32`
++- `AUTH_URL` (và `APP_URL`) — domain công khai thật, dạng
++  `https://domain-cua-ban.com`. **Phải khớp chính xác** domain thật sẽ
++  dùng để truy cập — sai domain ở đây làm các luồng redirect (đăng nhập
++  xong quay lại trang cũ...) trỏ nhầm chỗ một cách khó nhận ra. Xem thêm
++  `NEXTJS_NOTES.md` mục 14.
++
++Các biến còn lại (SMTP, R2/S3, rate limit) đều có fallback hợp lý nếu để
++trống — xem chú thích trong chính `.env.production.example`.
++
++```bash
++# 3. Build + chạy toàn bộ stack (app + Postgres). Lần đầu chạy sẽ tự áp
++# migration Prisma trước khi app khởi động (service "migrate").
++docker compose --env-file .env.production up -d --build
++
++# Xem log lúc khởi động (Ctrl+C để thoát xem log, không dừng container)
++docker compose --env-file .env.production logs -f app
++```
++
++App chạy ở cổng 3000 trên máy chủ (`http://may-chu:3000`) — đặt Nginx/Caddy
++phía trước để có HTTPS thật + domain, hoặc trỏ thẳng nếu máy chủ đã có
++reverse proxy khác. **Khuyến nghị mạnh:** đặt qua reverse proxy có set
++header `X-Forwarded-For`, nếu không tính năng giới hạn tốc độ (rate
++limiting, Giai đoạn 12) sẽ áp dụng chung cho mọi người thay vì theo từng
++IP — xem `NEXTJS_NOTES.md` mục 16.
++
++### Cập nhật lên phiên bản mới
++
++```bash
++git pull
++docker compose --env-file .env.production up -d --build
++```
++
++Lệnh trên tự build lại image mới và áp migration mới (nếu có) trước khi
++thay container app — dữ liệu Postgres không bị ảnh hưởng (lưu trong
++volume Docker riêng).
++
++### Sao lưu dữ liệu
++
++```bash
++# Sao lưu toàn bộ database ra file .sql
++docker compose --env-file .env.production exec db \
++  pg_dump -U chemshare chemshare > backup-$(date +%Y%m%d).sql
++```
++
++### Dừng / xoá
++
++```bash
++# Dừng, GIỮ NGUYÊN dữ liệu (volume vẫn còn, chạy lại "up" là có ngay)
++docker compose --env-file .env.production down
++
++# Dừng + XOÁ LUÔN dữ liệu Postgres lẫn file lưu cục bộ — cẩn thận, không
++# hoàn tác được nếu chưa sao lưu
++docker compose --env-file .env.production down -v
++```
++
+ ## Script
+ 
+ ```bash
+@@ -106,6 +179,7 @@ npm run format             # format code bằng Prettier
+ npm run format:check        # kiểm tra format mà không sửa
+ npm run db:generate          # sinh Prisma Client sau khi đổi schema
+ npm run db:migrate            # tạo + áp dụng migration mới (dev)
++npm run db:deploy              # áp migration đã có, KHÔNG tạo mới (production — docker-compose.yml dùng lệnh này)
+ npm run db:seed                # chạy lại seed dữ liệu mẫu
+ npm run db:studio                # mở Prisma Studio (xem/sửa dữ liệu qua UI)
+ ```
+diff --git a/ROADMAP.md b/ROADMAP.md
+index 2b90ce3..1a6834a 100644
+--- a/ROADMAP.md
++++ b/ROADMAP.md
+@@ -351,7 +351,57 @@ dark mode, tối ưu tốc độ) vẫn nằm ở Giai đoạn 11 như kế ho
+       - Devtools → Console khi chạy site có báo lỗi CSP nào không
+         (`Refused to execute/connect...`)
+ 
+-## ⬜ Giai đoạn 13 — Đóng gói & triển khai
+-
+-- `Dockerfile` production, `docker-compose.yml` production (app + db)
+-- `README.md` cập nhật hướng dẫn triển khai từ đầu đến chạy production
++## ✅ Giai đoạn 13 — Đóng gói & triển khai (hoàn tất phần code — cần chạy Docker thật để xác nhận)
++
++- [x] **`Dockerfile` production** — 3 giai đoạn (deps/builder/runner), dựa
++      trên mẫu chính thức mới nhất từ chính repo Next.js
++      (`github.com/vercel/next.js/tree/canary/examples/with-docker`, fetch
++      trực tiếp lúc làm, không nhớ lại từ training data). Chỉnh 2 chỗ
++      riêng cho project: thêm bước `prisma generate` trước `next build`
++      (dùng `DATABASE_URL` giả chỉ để lệnh này chạy qua, không kết nối
++      DB thật), và tạo sẵn thư mục `storage-local/` đúng quyền cho user
++      `node` trước khi mount volume (tránh lỗi permission denied)
++- [x] **`next.config.ts`**: thêm `output: "standalone"` — đã build thử
++      thật bằng `npm run build`, xác nhận phần compile/bundle qua trót
++      lọt (chỉ dừng ở lỗi type-check do sandbox thiếu Prisma Client đã
++      biết từ trước, không phải lỗi mới do standalone gây ra)
++- [x] **`.dockerignore`**
++- [x] **`docker-compose.yml` production** — 3 service: `db` (Postgres 16,
++      khớp `docker-compose.dev.yml` đã có từ Giai đoạn 1), `migrate`
++      (service chạy 1 lần áp `prisma migrate deploy`, dùng stage
++      `builder` của Dockerfile — có đủ Prisma CLI, khác `app` dùng stage
++      `runner` gọn nhẹ không có CLI), `app` (build từ Dockerfile, chờ
++      `migrate` xong mới khởi động, có healthcheck qua route mới
++      `/api/health`). Đã kiểm tra cú pháp YAML hợp lệ bằng `python3 -c
++      "import yaml..."`
++- [x] **`src/app/api/health/route.ts`** (mới) — health check thật (query
++      `SELECT 1` qua Prisma), không chỉ xác nhận app sống mà cả DB kết
++      nối được, dùng cho `healthcheck` của service `app` trong
++      docker-compose.yml
++- [x] **`.env.production.example`** (mới) — tách riêng khỏi
++      `.env.example` (dùng cho `npm run dev`) vì `DATABASE_URL` production
++      phải trỏ vào service `db` nội bộ Docker, không phải localhost/cloud
++      như lúc dev. Nhớ thêm `!.env.production.example` vào `.gitignore`
++      (suýt bị quy tắc `.env*` nuốt mất, chỉ có sẵn ngoại lệ cho
++      `.env.example`)
++- [x] **`package.json`**: thêm dependency `sharp` (bắt buộc để
++      `next/image` optimize hoạt động ở production — kiểm tra thấy thiếu
++      lúc rà lại trước khi viết Dockerfile) và script `db:deploy` (`prisma
++      migrate deploy` — an toàn cho production, khác `db:migrate`/`migrate
++      dev` vốn tương tác và chỉ dành cho dev)
++- [x] **`README.md`**: thêm mục "Triển khai (production)" đầy đủ — chuẩn
++      bị `.env.production`, chạy, cập nhật phiên bản mới, sao lưu
++      database, dừng/xoá
++- [ ] **Chưa chạy được `docker build`/`docker compose up` thật** — sandbox
++      không có Docker. Cần bạn tự chạy ở máy/máy chủ có Docker, đặc biệt
++      kiểm tra:
++      - `docker compose --env-file .env.production up -d --build` chạy
++        hết, không lỗi ở bước `prisma generate` hay `next build`
++      - Service `migrate` chạy xong (exit 0) trước khi `app` khởi động —
++        xem `docker compose ps`
++      - `curl http://localhost:3000/api/health` trả `{"status":"ok"}`
++      - Đăng nhập/upload thử trên bản Docker (không phải `npm run dev`)
++        chạy đúng như bản dev
++      - Nếu dùng fallback lưu file cục bộ (không cấu hình R2/S3): upload
++        1 file, `docker compose down` rồi `up` lại, xác nhận file vẫn còn
++        (volume `chemshare_storage_local` giữ đúng dữ liệu)
+diff --git a/docker-compose.yml b/docker-compose.yml
+new file mode 100644
+index 0000000..b40c901
+--- /dev/null
++++ b/docker-compose.yml
+@@ -0,0 +1,95 @@
++# docker-compose PRODUCTION — build app từ Dockerfile + chạy cùng
++# PostgreSQL. Khác với docker-compose.dev.yml (chỉ có DB + Adminer cho
++# `npm run dev`), file này chạy TOÀN BỘ stack bằng Docker, kể cả app.
++#
++# Chuẩn bị (1 lần):
++#   cp .env.production.example .env.production
++#   # điền giá trị thật vào .env.production, đặc biệt POSTGRES_PASSWORD,
++#   # AUTH_SECRET, AUTH_URL — xem chú thích trong chính file đó
++#
++# Chạy:
++#   docker compose --env-file .env.production up -d --build
++#
++# Xem log:
++#   docker compose --env-file .env.production logs -f app
++#
++# Dừng (giữ nguyên dữ liệu):
++#   docker compose --env-file .env.production down
++#
++# Dừng + XOÁ LUÔN dữ liệu DB (cẩn thận):
++#   docker compose --env-file .env.production down -v
++
++services:
++  db:
++    image: postgres:16-alpine
++    container_name: chemshare-db
++    restart: unless-stopped
++    environment:
++      POSTGRES_USER: ${POSTGRES_USER:-chemshare}
++      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Thiếu POSTGRES_PASSWORD — điền vào .env.production trước (xem .env.production.example)}
++      POSTGRES_DB: ${POSTGRES_DB:-chemshare}
++    volumes:
++      - chemshare_db_data:/var/lib/postgresql/data
++    healthcheck:
++      test:
++        [
++          "CMD-SHELL",
++          "pg_isready -U ${POSTGRES_USER:-chemshare} -d ${POSTGRES_DB:-chemshare}",
++        ]
++      interval: 5s
++      timeout: 5s
++      retries: 10
++    # Cố tình KHÔNG map port 5432 ra host — production không cần truy cập
++    # DB trực tiếp từ máy chủ. Cần xem/sửa dữ liệu thì:
++    #   docker compose --env-file .env.production exec db psql -U chemshare -d chemshare
++
++  # Service chạy 1 lần: áp migration Prisma rồi thoát (KHÔNG chạy server).
++  # Dùng stage "builder" của Dockerfile (có đủ Prisma CLI, node_modules
++  # đầy đủ) — khác với service "app" dùng stage cuối "runner" (gọn nhẹ,
++  # không có Prisma CLI). Xem chú thích trong Dockerfile.
++  migrate:
++    build:
++      context: .
++      target: builder
++    container_name: chemshare-migrate
++    env_file: .env.production
++    environment:
++      DATABASE_URL: postgresql://${POSTGRES_USER:-chemshare}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-chemshare}
++    depends_on:
++      db:
++        condition: service_healthy
++    command: ["npx", "prisma", "migrate", "deploy"]
++    restart: "no"
++
++  app:
++    build:
++      context: .
++    container_name: chemshare-app
++    restart: unless-stopped
++    env_file: .env.production
++    environment:
++      # Ghi đè DATABASE_URL từ .env.production (nếu có) — luôn trỏ đúng
++      # vào service "db" nội bộ, dựng từ cùng 3 biến POSTGRES_* ở trên,
++      # tránh phải khai trùng lặp/dễ lệch giữa 2 nơi.
++      DATABASE_URL: postgresql://${POSTGRES_USER:-chemshare}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-chemshare}
++    ports:
++      - "3000:3000"
++    volumes:
++      # Chỉ thật sự dùng khi STORAGE_PROVIDER để trống trong
++      # .env.production (fallback lưu file cục bộ, xem lib/storage.ts) —
++      # nếu đã cấu hình R2/S3 thì volume này không chứa gì, không hại gì
++      # khi vẫn khai ở đây.
++      - chemshare_storage_local:/app/storage-local
++    depends_on:
++      migrate:
++        condition: service_completed_successfully
++    healthcheck:
++      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
++      interval: 30s
++      timeout: 5s
++      retries: 3
++      start_period: 15s
++
++volumes:
++  chemshare_db_data:
++  chemshare_storage_local:
+diff --git a/next.config.ts b/next.config.ts
+index 0b53ab0..156735e 100644
+--- a/next.config.ts
++++ b/next.config.ts
+@@ -40,6 +40,10 @@ const cspHeader = `
+   .trim();
+ 
+ const nextConfig: NextConfig = {
++  // Giai đoạn 13: build ra .next/standalone (chỉ file thật sự cần chạy
++  // production, không kèm nguyên node_modules) — Dockerfile copy đúng
++  // phần này, ảnh Docker nhẹ hơn nhiều. Xem NEXTJS_NOTES.md mục 15.
++  output: "standalone",
+   // Prisma 7 + pg dùng native/binary bindings — để Turbopack/webpack tải
+   // trực tiếp từ node_modules lúc chạy thay vì cố bundle vào, tránh lỗi
+   // "Cannot find module '.prisma/client/default'". Xem NEXTJS_NOTES.md
+diff --git a/package.json b/package.json
+index 7b09409..b11a81a 100644
+--- a/package.json
++++ b/package.json
+@@ -12,7 +12,8 @@
+     "db:generate": "prisma generate",
+     "db:migrate": "prisma migrate dev",
+     "db:studio": "prisma studio",
+-    "db:seed": "prisma db seed"
++    "db:seed": "prisma db seed",
++    "db:deploy": "prisma migrate deploy"
+   },
+   "dependencies": {
+     "@aws-sdk/client-s3": "^3.1085.0",
+@@ -35,6 +36,7 @@
+     "pg": "^8.22.0",
+     "react": "19.2.4",
+     "react-dom": "19.2.4",
++    "sharp": "^0.35.3",
+     "tailwind-merge": "^3.6.0",
+     "zod": "^4.4.3"
+   },
+diff --git a/src/app/api/health/route.ts b/src/app/api/health/route.ts
+new file mode 100644
+index 0000000..33ff296
+--- /dev/null
++++ b/src/app/api/health/route.ts
+@@ -0,0 +1,22 @@
++import { NextResponse } from "next/server";
++import { prisma } from "@/lib/prisma";
++
++/**
++ * Health check cho Docker/orchestrator (xem docker-compose.yml,
++ * healthcheck của service "app") — không chỉ xác nhận app đang chạy
++ * (điều đó thì port mở là đủ biết) mà còn xác nhận DB thật sự kết nối
++ * được, vì "app sống nhưng không nói chuyện được với DB" là kiểu lỗi hay
++ * gặp nhất khi mới triển khai (sai DATABASE_URL, DB chưa sẵn sàng...).
++ *
++ * Cố tình KHÔNG yêu cầu đăng nhập — orchestrator gọi endpoint này không
++ * có cookie session.
++ */
++export async function GET() {
++  try {
++    await prisma.$queryRaw`SELECT 1`;
++    return NextResponse.json({ status: "ok" });
++  } catch (error) {
++    console.error("[health] Không kết nối được database:", error);
++    return NextResponse.json({ status: "error" }, { status: 503 });
++  }
++}

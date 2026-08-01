@@ -40,6 +40,10 @@ const cspHeader = `
   .trim();
 
 const nextConfig: NextConfig = {
+  // Giai đoạn 13: build ra .next/standalone (chỉ file thật sự cần chạy
+  // production, không kèm nguyên node_modules) — Dockerfile copy đúng
+  // phần này, ảnh Docker nhẹ hơn nhiều. Xem NEXTJS_NOTES.md mục 15.
+  output: "standalone",
   // Prisma 7 + pg dùng native/binary bindings — để Turbopack/webpack tải
   // trực tiếp từ node_modules lúc chạy thay vì cố bundle vào, tránh lỗi
   // "Cannot find module '.prisma/client/default'". Xem NEXTJS_NOTES.md

@@ -95,6 +95,79 @@ thay vì R2/S3 thật. Test được toàn bộ luồng đăng tải/tải xuố
 nào deploy thật hoặc muốn dùng cloud, điền đủ 4 biến đó vào `.env` là tự
 chuyển sang R2/S3, không cần sửa code gì thêm.
 
+## Triển khai (production)
+
+Yêu cầu: máy chủ có Docker + Docker Compose plugin, domain trỏ về máy chủ đó
+(hoặc ít nhất một địa chỉ IP truy cập được).
+
+```bash
+# 1. Lấy code về máy chủ (git clone hoặc kéo file lên)
+
+# 2. Tạo file biến môi trường production
+cp .env.production.example .env.production
+```
+
+Mở `.env.production` và điền giá trị thật — **bắt buộc** ít nhất 3 dòng
+sau, thiếu là container sẽ không khởi động được (có kiểm tra sẵn):
+
+- `POSTGRES_PASSWORD` — đặt mật khẩu mạnh, đừng để trống hay dùng giá trị
+  mẫu
+- `AUTH_SECRET` — tạo bằng `openssl rand -base64 32`
+- `AUTH_URL` (và `APP_URL`) — domain công khai thật, dạng
+  `https://domain-cua-ban.com`. **Phải khớp chính xác** domain thật sẽ
+  dùng để truy cập — sai domain ở đây làm các luồng redirect (đăng nhập
+  xong quay lại trang cũ...) trỏ nhầm chỗ một cách khó nhận ra. Xem thêm
+  `NEXTJS_NOTES.md` mục 14.
+
+Các biến còn lại (SMTP, R2/S3, rate limit) đều có fallback hợp lý nếu để
+trống — xem chú thích trong chính `.env.production.example`.
+
+```bash
+# 3. Build + chạy toàn bộ stack (app + Postgres). Lần đầu chạy sẽ tự áp
+# migration Prisma trước khi app khởi động (service "migrate").
+docker compose --env-file .env.production up -d --build
+
+# Xem log lúc khởi động (Ctrl+C để thoát xem log, không dừng container)
+docker compose --env-file .env.production logs -f app
+```
+
+App chạy ở cổng 3000 trên máy chủ (`http://may-chu:3000`) — đặt Nginx/Caddy
+phía trước để có HTTPS thật + domain, hoặc trỏ thẳng nếu máy chủ đã có
+reverse proxy khác. **Khuyến nghị mạnh:** đặt qua reverse proxy có set
+header `X-Forwarded-For`, nếu không tính năng giới hạn tốc độ (rate
+limiting, Giai đoạn 12) sẽ áp dụng chung cho mọi người thay vì theo từng
+IP — xem `NEXTJS_NOTES.md` mục 16.
+
+### Cập nhật lên phiên bản mới
+
+```bash
+git pull
+docker compose --env-file .env.production up -d --build
+```
+
+Lệnh trên tự build lại image mới và áp migration mới (nếu có) trước khi
+thay container app — dữ liệu Postgres không bị ảnh hưởng (lưu trong
+volume Docker riêng).
+
+### Sao lưu dữ liệu
+
+```bash
+# Sao lưu toàn bộ database ra file .sql
+docker compose --env-file .env.production exec db \
+  pg_dump -U chemshare chemshare > backup-$(date +%Y%m%d).sql
+```
+
+### Dừng / xoá
+
+```bash
+# Dừng, GIỮ NGUYÊN dữ liệu (volume vẫn còn, chạy lại "up" là có ngay)
+docker compose --env-file .env.production down
+
+# Dừng + XOÁ LUÔN dữ liệu Postgres lẫn file lưu cục bộ — cẩn thận, không
+# hoàn tác được nếu chưa sao lưu
+docker compose --env-file .env.production down -v
+```
+
 ## Script
 
 ```bash
@@ -106,6 +179,7 @@ npm run format             # format code bằng Prettier
 npm run format:check        # kiểm tra format mà không sửa
 npm run db:generate          # sinh Prisma Client sau khi đổi schema
 npm run db:migrate            # tạo + áp dụng migration mới (dev)
+npm run db:deploy              # áp migration đã có, KHÔNG tạo mới (production — docker-compose.yml dùng lệnh này)
 npm run db:seed                # chạy lại seed dữ liệu mẫu
 npm run db:studio                # mở Prisma Studio (xem/sửa dữ liệu qua UI)
 ```

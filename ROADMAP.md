@@ -351,7 +351,57 @@ dark mode, tối ưu tốc độ) vẫn nằm ở Giai đoạn 11 như kế ho�
       - Devtools → Console khi chạy site có báo lỗi CSP nào không
         (`Refused to execute/connect...`)
 
-## ⬜ Giai đoạn 13 — Đóng gói & triển khai
+## ✅ Giai đoạn 13 — Đóng gói & triển khai (hoàn tất phần code — cần chạy Docker thật để xác nhận)
 
-- `Dockerfile` production, `docker-compose.yml` production (app + db)
-- `README.md` cập nhật hướng dẫn triển khai từ đầu đến chạy production
+- [x] **`Dockerfile` production** — 3 giai đoạn (deps/builder/runner), dựa
+      trên mẫu chính thức mới nhất từ chính repo Next.js
+      (`github.com/vercel/next.js/tree/canary/examples/with-docker`, fetch
+      trực tiếp lúc làm, không nhớ lại từ training data). Chỉnh 2 chỗ
+      riêng cho project: thêm bước `prisma generate` trước `next build`
+      (dùng `DATABASE_URL` giả chỉ để lệnh này chạy qua, không kết nối
+      DB thật), và tạo sẵn thư mục `storage-local/` đúng quyền cho user
+      `node` trước khi mount volume (tránh lỗi permission denied)
+- [x] **`next.config.ts`**: thêm `output: "standalone"` — đã build thử
+      thật bằng `npm run build`, xác nhận phần compile/bundle qua trót
+      lọt (chỉ dừng ở lỗi type-check do sandbox thiếu Prisma Client đã
+      biết từ trước, không phải lỗi mới do standalone gây ra)
+- [x] **`.dockerignore`**
+- [x] **`docker-compose.yml` production** — 3 service: `db` (Postgres 16,
+      khớp `docker-compose.dev.yml` đã có từ Giai đoạn 1), `migrate`
+      (service chạy 1 lần áp `prisma migrate deploy`, dùng stage
+      `builder` của Dockerfile — có đủ Prisma CLI, khác `app` dùng stage
+      `runner` gọn nhẹ không có CLI), `app` (build từ Dockerfile, chờ
+      `migrate` xong mới khởi động, có healthcheck qua route mới
+      `/api/health`). Đã kiểm tra cú pháp YAML hợp lệ bằng `python3 -c
+      "import yaml..."`
+- [x] **`src/app/api/health/route.ts`** (mới) — health check thật (query
+      `SELECT 1` qua Prisma), không chỉ xác nhận app sống mà cả DB kết
+      nối được, dùng cho `healthcheck` của service `app` trong
+      docker-compose.yml
+- [x] **`.env.production.example`** (mới) — tách riêng khỏi
+      `.env.example` (dùng cho `npm run dev`) vì `DATABASE_URL` production
+      phải trỏ vào service `db` nội bộ Docker, không phải localhost/cloud
+      như lúc dev. Nhớ thêm `!.env.production.example` vào `.gitignore`
+      (suýt bị quy tắc `.env*` nuốt mất, chỉ có sẵn ngoại lệ cho
+      `.env.example`)
+- [x] **`package.json`**: thêm dependency `sharp` (bắt buộc để
+      `next/image` optimize hoạt động ở production — kiểm tra thấy thiếu
+      lúc rà lại trước khi viết Dockerfile) và script `db:deploy` (`prisma
+      migrate deploy` — an toàn cho production, khác `db:migrate`/`migrate
+      dev` vốn tương tác và chỉ dành cho dev)
+- [x] **`README.md`**: thêm mục "Triển khai (production)" đầy đủ — chuẩn
+      bị `.env.production`, chạy, cập nhật phiên bản mới, sao lưu
+      database, dừng/xoá
+- [ ] **Chưa chạy được `docker build`/`docker compose up` thật** — sandbox
+      không có Docker. Cần bạn tự chạy ở máy/máy chủ có Docker, đặc biệt
+      kiểm tra:
+      - `docker compose --env-file .env.production up -d --build` chạy
+        hết, không lỗi ở bước `prisma generate` hay `next build`
+      - Service `migrate` chạy xong (exit 0) trước khi `app` khởi động —
+        xem `docker compose ps`
+      - `curl http://localhost:3000/api/health` trả `{"status":"ok"}`
+      - Đăng nhập/upload thử trên bản Docker (không phải `npm run dev`)
+        chạy đúng như bản dev
+      - Nếu dùng fallback lưu file cục bộ (không cấu hình R2/S3): upload
+        1 file, `docker compose down` rồi `up` lại, xác nhận file vẫn còn
+        (volume `chemshare_storage_local` giữ đúng dữ liệu)

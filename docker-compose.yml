@@ -1,0 +1,95 @@
+# docker-compose PRODUCTION — build app từ Dockerfile + chạy cùng
+# PostgreSQL. Khác với docker-compose.dev.yml (chỉ có DB + Adminer cho
+# `npm run dev`), file này chạy TOÀN BỘ stack bằng Docker, kể cả app.
+#
+# Chuẩn bị (1 lần):
+#   cp .env.production.example .env.production
+#   # điền giá trị thật vào .env.production, đặc biệt POSTGRES_PASSWORD,
+#   # AUTH_SECRET, AUTH_URL — xem chú thích trong chính file đó
+#
+# Chạy:
+#   docker compose --env-file .env.production up -d --build
+#
+# Xem log:
+#   docker compose --env-file .env.production logs -f app
+#
+# Dừng (giữ nguyên dữ liệu):
+#   docker compose --env-file .env.production down
+#
+# Dừng + XOÁ LUÔN dữ liệu DB (cẩn thận):
+#   docker compose --env-file .env.production down -v
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: chemshare-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chemshare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Thiếu POSTGRES_PASSWORD — điền vào .env.production trước (xem .env.production.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-chemshare}
+    volumes:
+      - chemshare_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-chemshare} -d ${POSTGRES_DB:-chemshare}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Cố tình KHÔNG map port 5432 ra host — production không cần truy cập
+    # DB trực tiếp từ máy chủ. Cần xem/sửa dữ liệu thì:
+    #   docker compose --env-file .env.production exec db psql -U chemshare -d chemshare
+
+  # Service chạy 1 lần: áp migration Prisma rồi thoát (KHÔNG chạy server).
+  # Dùng stage "builder" của Dockerfile (có đủ Prisma CLI, node_modules
+  # đầy đủ) — khác với service "app" dùng stage cuối "runner" (gọn nhẹ,
+  # không có Prisma CLI). Xem chú thích trong Dockerfile.
+  migrate:
+    build:
+      context: .
+      target: builder
+    container_name: chemshare-migrate
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-chemshare}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-chemshare}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["npx", "prisma", "migrate", "deploy"]
+    restart: "no"
+
+  app:
+    build:
+      context: .
+    container_name: chemshare-app
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      # Ghi đè DATABASE_URL từ .env.production (nếu có) — luôn trỏ đúng
+      # vào service "db" nội bộ, dựng từ cùng 3 biến POSTGRES_* ở trên,
+      # tránh phải khai trùng lặp/dễ lệch giữa 2 nơi.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-chemshare}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-chemshare}
+    ports:
+      - "3000:3000"
+    volumes:
+      # Chỉ thật sự dùng khi STORAGE_PROVIDER để trống trong
+      # .env.production (fallback lưu file cục bộ, xem lib/storage.ts) —
+      # nếu đã cấu hình R2/S3 thì volume này không chứa gì, không hại gì
+      # khi vẫn khai ở đây.
+      - chemshare_storage_local:/app/storage-local
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  chemshare_db_data:
+  chemshare_storage_local:
