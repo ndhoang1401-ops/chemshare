@@ -95,78 +95,91 @@ thay vì R2/S3 thật. Test được toàn bộ luồng đăng tải/tải xuố
 nào deploy thật hoặc muốn dùng cloud, điền đủ 4 biến đó vào `.env` là tự
 chuyển sang R2/S3, không cần sửa code gì thêm.
 
-## Triển khai (production)
+## Triển khai (production) — Vercel + Neon + Cloudflare R2
 
-Yêu cầu: máy chủ có Docker + Docker Compose plugin, domain trỏ về máy chủ đó
-(hoặc ít nhất một địa chỉ IP truy cập được).
+Không cần server riêng, không cần Docker/SSH — chỉ cần 3 tài khoản miễn
+phí: [Vercel](https://vercel.com) (host code), [Neon](https://neon.tech)
+(database Postgres), [Cloudflare R2](https://dash.cloudflare.com) (lưu
+file upload).
 
-```bash
-# 1. Lấy code về máy chủ (git clone hoặc kéo file lên)
+### 1. Tạo database trên Neon
 
-# 2. Tạo file biến môi trường production
-cp .env.production.example .env.production
-```
+1. Đăng ký/đăng nhập [neon.tech](https://neon.tech), tạo 1 project mới
+2. Vào project → **Connection string** → chọn nhánh **Pooled connection**
+   (KHÔNG chọn "Direct connection" — pooled mới chịu được nhiều kết nối
+   đồng thời như Vercel serverless tạo ra)
+3. Copy chuỗi dạng `postgresql://...@ep-xxx-pooler.../neondb?sslmode=require`
+   — đây là giá trị `DATABASE_URL` sẽ dùng ở bước 4
 
-Mở `.env.production` và điền giá trị thật — **bắt buộc** ít nhất 3 dòng
-sau, thiếu là container sẽ không khởi động được (có kiểm tra sẵn):
+### 2. Tạo bucket lưu file trên Cloudflare R2
 
-- `POSTGRES_PASSWORD` — đặt mật khẩu mạnh, đừng để trống hay dùng giá trị
-  mẫu
-- `AUTH_SECRET` — tạo bằng `openssl rand -base64 32`
-- `AUTH_URL` (và `APP_URL`) — domain công khai thật, dạng
-  `https://domain-cua-ban.com`. **Phải khớp chính xác** domain thật sẽ
-  dùng để truy cập — sai domain ở đây làm các luồng redirect (đăng nhập
-  xong quay lại trang cũ...) trỏ nhầm chỗ một cách khó nhận ra. Xem thêm
-  `NEXTJS_NOTES.md` mục 14.
+1. Đăng nhập [dash.cloudflare.com](https://dash.cloudflare.com) → menu
+   **R2 Object Storage** → **Create bucket**, đặt tên bất kỳ (vd.
+   `chemshare-documents`)
+2. Vào bucket vừa tạo → **Settings** → **Public access** → bật
+   **Allow public access** qua "R2.dev subdomain" → copy URL dạng
+   `https://pub-xxxx.r2.dev` (đây là `STORAGE_PUBLIC_URL`)
+3. Quay lại trang R2 chính → **Manage API tokens** → **Create API token**
+   → quyền **Object Read & Write**, giới hạn đúng bucket vừa tạo → tạo
+   xong sẽ hiện **Access Key ID**, **Secret Access Key**, và **Endpoint**
+   (dạng `https://<account-id>.r2.cloudflarestorage.com`) — copy cả 3,
+   **chỉ hiện 1 lần**, đóng trang là mất
 
-Các biến còn lại (SMTP, R2/S3, rate limit) đều có fallback hợp lý nếu để
-trống — xem chú thích trong chính `.env.production.example`.
+### 3. Đưa code lên Vercel
 
-```bash
-# 3. Build + chạy toàn bộ stack (app + Postgres). Lần đầu chạy sẽ tự áp
-# migration Prisma trước khi app khởi động (service "migrate").
-docker compose --env-file .env.production up -d --build
+1. Đăng ký/đăng nhập [vercel.com](https://vercel.com) bằng tài khoản
+   GitHub
+2. **Add New** → **Project** → chọn repo `chemshare` → **Import**
+3. ĐỪNG bấm Deploy vội — bấm **Environment Variables**, thêm từng dòng
+   (tên biến bên trái, giá trị bên phải):
 
-# Xem log lúc khởi động (Ctrl+C để thoát xem log, không dừng container)
-docker compose --env-file .env.production logs -f app
-```
+   | Biến                        | Giá trị                                                  |
+   | --------------------------- | --------------------------------------------------------- |
+   | `DATABASE_URL`               | chuỗi Neon lấy ở bước 1                                    |
+   | `AUTH_SECRET`                 | chạy `openssl rand -base64 32` (Windows: xem ghi chú dưới) |
+   | `AUTH_URL`                   | để tạm `https://ten-project.vercel.app` (Vercel cho biết tên chính xác ngay khi Import xong — sửa lại sau nếu cần) |
+   | `APP_URL`                     | giống `AUTH_URL`                                           |
+   | `STORAGE_ENDPOINT`            | Endpoint lấy ở bước 2                                      |
+   | `STORAGE_BUCKET`              | tên bucket ở bước 2                                        |
+   | `STORAGE_ACCESS_KEY_ID`       | Access Key ID ở bước 2                                     |
+   | `STORAGE_SECRET_ACCESS_KEY`   | Secret Access Key ở bước 2                                 |
+   | `STORAGE_PUBLIC_URL`          | URL public ở bước 2                                        |
+   | `STORAGE_REGION`              | `auto`                                                     |
+   | `EMAIL_SERVER_HOST`           | (SMTP thật nếu có, không thì để trống — quên/đặt lại mật khẩu qua email sẽ không gửi được) |
+   | `EMAIL_SERVER_PORT`           | `587`                                                      |
+   | `EMAIL_FROM`                  | `Nguyên Tố <no-reply@example.com>`                         |
 
-App chạy ở cổng 3000 trên máy chủ (`http://may-chu:3000`) — đặt Nginx/Caddy
-phía trước để có HTTPS thật + domain, hoặc trỏ thẳng nếu máy chủ đã có
-reverse proxy khác. **Khuyến nghị mạnh:** đặt qua reverse proxy có set
-header `X-Forwarded-For`, nếu không tính năng giới hạn tốc độ (rate
-limiting, Giai đoạn 12) sẽ áp dụng chung cho mọi người thay vì theo từng
-IP — xem `NEXTJS_NOTES.md` mục 16.
+   Windows không có sẵn `openssl` thì tạo `AUTH_SECRET` bằng:
+   ```powershell
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   ```
+
+4. Bấm **Deploy**. Vercel tự chạy `npm install` (tự `prisma generate`
+   luôn nhờ script `postinstall` đã thêm) rồi build (tự áp migration
+   Prisma nhờ script `vercel-build`) — theo dõi log ngay trên trang, mất
+   khoảng 1-2 phút
+
+### 4. Sau khi deploy xong
+
+- Vercel cho 1 link dạng `https://ten-project.vercel.app` — vào thử,
+  test đăng ký/đăng nhập/upload 1 file xem tải xuống lại được không
+  (xác nhận R2 hoạt động thật, không phải "tưởng chạy" mà đang âm thầm
+  lưu vào ổ đĩa tạm của Vercel — lưu kiểu đó sẽ MẤT file sau lần deploy
+  kế tiếp)
+- Có domain riêng muốn dùng thay vì `.vercel.app`: vào **Settings** →
+  **Domains** trong project Vercel, làm theo hướng dẫn (thêm bản ghi DNS
+  tại nơi mua domain) — xong thì QUAY LẠI sửa `AUTH_URL`/`APP_URL` ở
+  bước 3 thành domain mới, bấm **Redeploy** (mục "Deployments" → dấu 3
+  chấm → Redeploy)
 
 ### Cập nhật lên phiên bản mới
 
-```bash
-git pull
-docker compose --env-file .env.production up -d --build
+```powershell
+git push
 ```
 
-Lệnh trên tự build lại image mới và áp migration mới (nếu có) trước khi
-thay container app — dữ liệu Postgres không bị ảnh hưởng (lưu trong
-volume Docker riêng).
-
-### Sao lưu dữ liệu
-
-```bash
-# Sao lưu toàn bộ database ra file .sql
-docker compose --env-file .env.production exec db \
-  pg_dump -U chemshare chemshare > backup-$(date +%Y%m%d).sql
-```
-
-### Dừng / xoá
-
-```bash
-# Dừng, GIỮ NGUYÊN dữ liệu (volume vẫn còn, chạy lại "up" là có ngay)
-docker compose --env-file .env.production down
-
-# Dừng + XOÁ LUÔN dữ liệu Postgres lẫn file lưu cục bộ — cẩn thận, không
-# hoàn tác được nếu chưa sao lưu
-docker compose --env-file .env.production down -v
-```
+Vercel tự động deploy lại mỗi khi bạn `push` lên GitHub — không cần làm
+gì thêm.
 
 ## Script
 
@@ -179,7 +192,7 @@ npm run format             # format code bằng Prettier
 npm run format:check        # kiểm tra format mà không sửa
 npm run db:generate          # sinh Prisma Client sau khi đổi schema
 npm run db:migrate            # tạo + áp dụng migration mới (dev)
-npm run db:deploy              # áp migration đã có, KHÔNG tạo mới (production — docker-compose.yml dùng lệnh này)
+npm run db:deploy              # áp migration đã có, KHÔNG tạo mới (Vercel tự chạy qua script "vercel-build" mỗi lần deploy, không cần gọi tay)
 npm run db:seed                # chạy lại seed dữ liệu mẫu
 npm run db:studio                # mở Prisma Studio (xem/sửa dữ liệu qua UI)
 ```

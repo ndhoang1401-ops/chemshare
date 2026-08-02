@@ -416,3 +416,58 @@ domain qua reverse proxy đó thay vì thẳng cổng 3000. Việc thêm reverse
 proxy nằm NGOÀI phạm vi Giai đoạn 13 (chỉ yêu cầu Dockerfile +
 docker-compose.yml + README) — cố tình để lại làm việc riêng nếu cần,
 tránh đoán sai domain/chứng chỉ TLS của người triển khai.
+
+## 17. Đổi hướng Docker → Vercel + Neon + R2 (Giai đoạn 13, sau khi xác nhận người dùng không quen quản trị server)
+
+Đã làm xong Docker + Caddy (mục 15-16), nhưng người dùng xác nhận chưa
+từng dùng SSH/server, muốn thứ dễ hơn. Chuyển sang Vercel — bỏ hẳn
+Docker/Caddy khỏi hướng triển khai chính (vẫn còn trong lịch sử git nếu
+sau này cần tự host lại).
+
+**3 điểm code phải đổi khi chuyển nền tảng, đã kiểm chứng qua tìm hiểu
+thật (không đoán):**
+
+1. **Bỏ `output: "standalone"` khỏi `next.config.ts`** — setting này
+   riêng cho self-host (Docker/VPS), không cần cho Vercel (Vercel có cơ
+   chế Build Output API riêng). Có ghi nhận issue thật trên GitHub
+   (`vercel/next.js#43654`) về xung đột khi cùng lúc dùng
+   `output: standalone` VÀ lệnh `vercel build` — dù project này không rơi
+   đúng vào tình huống đó (chỉ dùng 1 trong 2 hướng, không cần cả hai
+   cùng lúc), an toàn nhất là bỏ hẳn khi đã quyết định dùng Vercel.
+
+2. **Bắt buộc cấu hình Cloudflare R2 (hoặc S3) — không thể dùng fallback
+   lưu file cục bộ `storage-local/` nữa.** Vercel chạy serverless function
+   — hệ thống file KHÔNG bền vững giữa các lần gọi hàm/lần deploy (ghi
+   file lúc này, request sau có thể chạy trên instance khác không thấy
+   file đó, và chắc chắn mất sau lần deploy tiếp theo). `lib/storage.ts`
+   đã viết sẵn để tự chuyển sang cloud khi đủ 4 biến `STORAGE_ENDPOINT`/
+   `STORAGE_BUCKET`/`STORAGE_ACCESS_KEY_ID`/`STORAGE_SECRET_ACCESS_KEY`
+   (đọc thẳng code xác nhận, không đoán) — không cần sửa code, chỉ cần
+   điền đủ biến môi trường trên Vercel.
+
+3. **Rate limiting in-memory (Giai đoạn 12, `lib/rate-limit.ts`) kém tin
+   cậy hơn trên Vercel serverless** — mỗi lần gọi hàm có thể chạy trên
+   instance khác nhau, không chia sẻ chung 1 `Map` trong bộ nhớ như khi
+   chạy 1 process Node duy nhất (Docker). Với quy mô nhỏ, Vercel có xu
+   hướng tái dùng cùng 1 instance ấm (warm) cho các request liên tiếp gần
+   nhau nên vẫn có tác dụng phần nào, nhưng KHÔNG đảm bảo chính xác tuyệt
+   đối như khi tự host. Chưa cần sửa ngay (chấp nhận được ở quy mô nhỏ) —
+   muốn chính xác tuyệt đối thì cần store dùng chung thật (Vercel KV/
+   Upstash Redis), việc riêng nếu cần sau này.
+
+**2 script mới trong `package.json` để Vercel tự động hoá, không cần bước
+tay:**
+
+- `postinstall: "prisma generate"` — Vercel tự chạy ngay sau
+  `npm install`, đảm bảo `@prisma/client` luôn có type mới nhất mỗi lần
+  build mà không cần nhớ chạy `npx prisma generate` riêng (cũng tiện lúc
+  dev trên máy — `npm install` giờ tự generate luôn)
+- `vercel-build: "prisma migrate deploy && next build"` — Vercel tự ưu
+  tiên dùng script này thay vì `build` thường nếu tồn tại (quy ước có sẵn
+  của Vercel) — tự áp migration Prisma trước khi build mỗi lần deploy,
+  không cần bước "migrate" tách riêng như bản Docker (mục 15)
+
+**Lưu ý quan trọng vẫn giữ nguyên dù đổi nền tảng:** `AUTH_URL` vẫn phải
+khớp CHÍNH XÁC domain thật đang dùng (mục 14) — chỉ khác là giờ domain đó
+do Vercel cấp (`*.vercel.app`) hoặc domain riêng gắn qua Vercel, không
+phải domain tự trỏ DNS vào server như hướng Docker.

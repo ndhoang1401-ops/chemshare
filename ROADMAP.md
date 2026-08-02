@@ -351,57 +351,40 @@ dark mode, tối ưu tốc độ) vẫn nằm ở Giai đoạn 11 như kế ho�
       - Devtools → Console khi chạy site có báo lỗi CSP nào không
         (`Refused to execute/connect...`)
 
-## ✅ Giai đoạn 13 — Đóng gói & triển khai (hoàn tất phần code — cần chạy Docker thật để xác nhận)
+## ✅ Giai đoạn 13 — Đóng gói & triển khai (hoàn tất phần code — cần deploy Vercel thật để xác nhận)
 
-- [x] **`Dockerfile` production** — 3 giai đoạn (deps/builder/runner), dựa
-      trên mẫu chính thức mới nhất từ chính repo Next.js
-      (`github.com/vercel/next.js/tree/canary/examples/with-docker`, fetch
-      trực tiếp lúc làm, không nhớ lại từ training data). Chỉnh 2 chỗ
-      riêng cho project: thêm bước `prisma generate` trước `next build`
-      (dùng `DATABASE_URL` giả chỉ để lệnh này chạy qua, không kết nối
-      DB thật), và tạo sẵn thư mục `storage-local/` đúng quyền cho user
-      `node` trước khi mount volume (tránh lỗi permission denied)
-- [x] **`next.config.ts`**: thêm `output: "standalone"` — đã build thử
-      thật bằng `npm run build`, xác nhận phần compile/bundle qua trót
-      lọt (chỉ dừng ở lỗi type-check do sandbox thiếu Prisma Client đã
-      biết từ trước, không phải lỗi mới do standalone gây ra)
-- [x] **`.dockerignore`**
-- [x] **`docker-compose.yml` production** — 3 service: `db` (Postgres 16,
-      khớp `docker-compose.dev.yml` đã có từ Giai đoạn 1), `migrate`
-      (service chạy 1 lần áp `prisma migrate deploy`, dùng stage
-      `builder` của Dockerfile — có đủ Prisma CLI, khác `app` dùng stage
-      `runner` gọn nhẹ không có CLI), `app` (build từ Dockerfile, chờ
-      `migrate` xong mới khởi động, có healthcheck qua route mới
-      `/api/health`). Đã kiểm tra cú pháp YAML hợp lệ bằng `python3 -c
-      "import yaml..."`
-- [x] **`src/app/api/health/route.ts`** (mới) — health check thật (query
-      `SELECT 1` qua Prisma), không chỉ xác nhận app sống mà cả DB kết
-      nối được, dùng cho `healthcheck` của service `app` trong
-      docker-compose.yml
-- [x] **`.env.production.example`** (mới) — tách riêng khỏi
-      `.env.example` (dùng cho `npm run dev`) vì `DATABASE_URL` production
-      phải trỏ vào service `db` nội bộ Docker, không phải localhost/cloud
-      như lúc dev. Nhớ thêm `!.env.production.example` vào `.gitignore`
-      (suýt bị quy tắc `.env*` nuốt mất, chỉ có sẵn ngoại lệ cho
-      `.env.example`)
-- [x] **`package.json`**: thêm dependency `sharp` (bắt buộc để
-      `next/image` optimize hoạt động ở production — kiểm tra thấy thiếu
-      lúc rà lại trước khi viết Dockerfile) và script `db:deploy` (`prisma
-      migrate deploy` — an toàn cho production, khác `db:migrate`/`migrate
-      dev` vốn tương tác và chỉ dành cho dev)
-- [x] **`README.md`**: thêm mục "Triển khai (production)" đầy đủ — chuẩn
-      bị `.env.production`, chạy, cập nhật phiên bản mới, sao lưu
-      database, dừng/xoá
-- [ ] **Chưa chạy được `docker build`/`docker compose up` thật** — sandbox
-      không có Docker. Cần bạn tự chạy ở máy/máy chủ có Docker, đặc biệt
-      kiểm tra:
-      - `docker compose --env-file .env.production up -d --build` chạy
-        hết, không lỗi ở bước `prisma generate` hay `next build`
-      - Service `migrate` chạy xong (exit 0) trước khi `app` khởi động —
-        xem `docker compose ps`
-      - `curl http://localhost:3000/api/health` trả `{"status":"ok"}`
-      - Đăng nhập/upload thử trên bản Docker (không phải `npm run dev`)
-        chạy đúng như bản dev
-      - Nếu dùng fallback lưu file cục bộ (không cấu hình R2/S3): upload
-        1 file, `docker compose down` rồi `up` lại, xác nhận file vẫn còn
-        (volume `chemshare_storage_local` giữ đúng dữ liệu)
+**Đổi hướng giữa chừng:** bản đầu làm Docker + Caddy tự host (còn trong
+lịch sử git, commit "Giai Đoạn 13"), nhưng người dùng không có kinh
+nghiệm quản trị server (SSH/Docker quá phức tạp với người mới) nên đã
+chuyển sang **Vercel + Neon + Cloudflare R2** — không cần server tự quản,
+tất cả đều có gói miễn phí, không cần biết Docker/SSH.
+
+- [x] **`next.config.ts`**: bỏ `output: "standalone"` (chỉ cần cho tự
+      host bằng Docker — Vercel có cơ chế build/deploy riêng, giữ dòng
+      này có thể gây xung đột không cần thiết). Xem NEXTJS_NOTES.md mục
+      17
+- [x] **`package.json`**: thêm `postinstall: "prisma generate"` (Vercel
+      tự chạy sau `npm install`, không cần nhớ chạy tay) và
+      `vercel-build: "prisma migrate deploy && next build"` (Vercel tự
+      dùng script này thay vì `build` nếu có — tự áp migration Prisma
+      trước khi build mỗi lần deploy, không cần bước thủ công riêng)
+- [x] Đã xoá `Dockerfile`, `docker-compose.yml`, `.dockerignore`,
+      `.env.production.example` (không dùng nữa với hướng Vercel) — vẫn
+      còn trong lịch sử git nếu sau này muốn quay lại tự host
+- [x] **`src/app/api/health/route.ts`** — giữ lại dù không bắt buộc với
+      Vercel (Vercel có dashboard theo dõi riêng), vẫn hữu ích để tự kiểm
+      tra nhanh kết nối DB qua trình duyệt
+- [x] **`README.md`**: viết lại phần "Triển khai" theo Vercel + Neon + R2,
+      từng bước cho người mới (tạo tài khoản, lấy connection string, tạo
+      bucket...)
+- [ ] **Chưa deploy thật lên Vercel để xác nhận** — cần người dùng tự làm
+      theo README, đặc biệt kiểm tra:
+      - Build trên Vercel thành công (xem tab "Deployments" → log build)
+      - Đăng nhập/đăng ký hoạt động (test kỹ AUTH_URL khớp đúng domain
+        Vercel cấp, xem NEXTJS_NOTES.md mục 14)
+      - Upload 1 file thật, xác nhận tải xuống lại được (xác nhận R2
+        hoạt động, không phải đang âm thầm dùng fallback lưu cục bộ —
+        Vercel sẽ mất file này sau lần deploy kế tiếp nếu R2 chưa đúng)
+      - Rate limiting đăng nhập sai nhiều lần — chấp nhận có thể không
+        chính xác 100% trên Vercel serverless (nhiều instance chạy song
+        song không chia sẻ bộ nhớ), xem NEXTJS_NOTES.md mục 17

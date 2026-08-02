@@ -40,10 +40,12 @@ const cspHeader = `
   .trim();
 
 const nextConfig: NextConfig = {
-  // Giai đoạn 13: build ra .next/standalone (chỉ file thật sự cần chạy
-  // production, không kèm nguyên node_modules) — Dockerfile copy đúng
-  // phần này, ảnh Docker nhẹ hơn nhiều. Xem NEXTJS_NOTES.md mục 15.
-  output: "standalone",
+  // (Giai đoạn 13 ban đầu định self-host bằng Docker, có thêm
+  // `output: "standalone"` ở đây — đã bỏ khi chuyển sang Vercel, vì
+  // Vercel có cơ chế build/deploy riêng không cần/không tương thích hoàn
+  // toàn với standalone mode. Nếu sau này quay lại tự host bằng Docker,
+  // thêm lại dòng `output: "standalone"` vào đây. Xem NEXTJS_NOTES.md
+  // mục 17.)
   // Prisma 7 + pg dùng native/binary bindings — để Turbopack/webpack tải
   // trực tiếp từ node_modules lúc chạy thay vì cố bundle vào, tránh lỗi
   // "Cannot find module '.prisma/client/default'". Xem NEXTJS_NOTES.md
