@@ -16,9 +16,9 @@ người tự học. Tài liệu chỉ công khai sau khi được kiểm duyệ
 | Database     | PostgreSQL                                              |
 | ORM          | Prisma                                                   |
 | Xác thực     | Auth.js (NextAuth)                                       |
-| Lưu trữ file | Cloudflare R2 / AWS S3                                   |
+| Lưu trữ file | Vercel Blob                                              |
 | Tìm kiếm     | PostgreSQL Full Text Search                              |
-| Triển khai   | Docker + VPS hoặc Vercel                                 |
+| Triển khai   | Vercel                                                    |
 
 ## Bắt đầu (môi trường phát triển)
 
@@ -87,20 +87,19 @@ thực/đặt lại mật khẩu sẽ được **in thẳng ra terminal** đang 
 `npm run dev` (kèm link để bấm), không cần SMTP thật để test luồng đăng
 ký/quên mật khẩu.
 
-### Chưa cấu hình Cloudflare R2 / AWS S3?
+### Chưa cấu hình Vercel Blob?
 
-Cũng không sao — khi chưa điền đủ 4 biến `STORAGE_*` trong `.env`, file
+Cũng không sao — khi chưa điền `BLOB_READ_WRITE_TOKEN` trong `.env`, file
 đăng tải (`/upload`) sẽ tự động lưu vào thư mục `storage-local/` trên đĩa
-thay vì R2/S3 thật. Test được toàn bộ luồng đăng tải/tải xuống ngay; khi
-nào deploy thật hoặc muốn dùng cloud, điền đủ 4 biến đó vào `.env` là tự
-chuyển sang R2/S3, không cần sửa code gì thêm.
+thay vì Vercel Blob thật. Test được toàn bộ luồng đăng tải/tải xuống
+ngay; khi nào deploy thật lên Vercel và kết nối Blob store vào project,
+Vercel tự điền biến này, không cần sửa code gì thêm.
 
-## Triển khai (production) — Vercel + Neon + Cloudflare R2
+## Triển khai (production) — Vercel + Neon
 
-Không cần server riêng, không cần Docker/SSH — chỉ cần 3 tài khoản miễn
-phí: [Vercel](https://vercel.com) (host code), [Neon](https://neon.tech)
-(database Postgres), [Cloudflare R2](https://dash.cloudflare.com) (lưu
-file upload).
+Không cần server riêng, không cần Docker/SSH — chỉ cần 2 tài khoản miễn
+phí: [Vercel](https://vercel.com) (host code + lưu file) và
+[Neon](https://neon.tech) (database Postgres).
 
 ### 1. Tạo database trên Neon
 
@@ -109,23 +108,9 @@ file upload).
    (KHÔNG chọn "Direct connection" — pooled mới chịu được nhiều kết nối
    đồng thời như Vercel serverless tạo ra)
 3. Copy chuỗi dạng `postgresql://...@ep-xxx-pooler.../neondb?sslmode=require`
-   — đây là giá trị `DATABASE_URL` sẽ dùng ở bước 4
+   — đây là giá trị `DATABASE_URL` sẽ dùng ở bước 2
 
-### 2. Tạo bucket lưu file trên Cloudflare R2
-
-1. Đăng nhập [dash.cloudflare.com](https://dash.cloudflare.com) → menu
-   **R2 Object Storage** → **Create bucket**, đặt tên bất kỳ (vd.
-   `chemshare-documents`)
-2. Vào bucket vừa tạo → **Settings** → **Public access** → bật
-   **Allow public access** qua "R2.dev subdomain" → copy URL dạng
-   `https://pub-xxxx.r2.dev` (đây là `STORAGE_PUBLIC_URL`)
-3. Quay lại trang R2 chính → **Manage API tokens** → **Create API token**
-   → quyền **Object Read & Write**, giới hạn đúng bucket vừa tạo → tạo
-   xong sẽ hiện **Access Key ID**, **Secret Access Key**, và **Endpoint**
-   (dạng `https://<account-id>.r2.cloudflarestorage.com`) — copy cả 3,
-   **chỉ hiện 1 lần**, đóng trang là mất
-
-### 3. Đưa code lên Vercel
+### 2. Đưa code lên Vercel
 
 1. Đăng ký/đăng nhập [vercel.com](https://vercel.com) bằng tài khoản
    GitHub
@@ -133,21 +118,15 @@ file upload).
 3. ĐỪNG bấm Deploy vội — bấm **Environment Variables**, thêm từng dòng
    (tên biến bên trái, giá trị bên phải):
 
-   | Biến                        | Giá trị                                                  |
-   | --------------------------- | --------------------------------------------------------- |
-   | `DATABASE_URL`               | chuỗi Neon lấy ở bước 1                                    |
-   | `AUTH_SECRET`                 | chạy `openssl rand -base64 32` (Windows: xem ghi chú dưới) |
-   | `AUTH_URL`                   | để tạm `https://ten-project.vercel.app` (Vercel cho biết tên chính xác ngay khi Import xong — sửa lại sau nếu cần) |
-   | `APP_URL`                     | giống `AUTH_URL`                                           |
-   | `STORAGE_ENDPOINT`            | Endpoint lấy ở bước 2                                      |
-   | `STORAGE_BUCKET`              | tên bucket ở bước 2                                        |
-   | `STORAGE_ACCESS_KEY_ID`       | Access Key ID ở bước 2                                     |
-   | `STORAGE_SECRET_ACCESS_KEY`   | Secret Access Key ở bước 2                                 |
-   | `STORAGE_PUBLIC_URL`          | URL public ở bước 2                                        |
-   | `STORAGE_REGION`              | `auto`                                                     |
-   | `EMAIL_SERVER_HOST`           | (SMTP thật nếu có, không thì để trống — quên/đặt lại mật khẩu qua email sẽ không gửi được) |
-   | `EMAIL_SERVER_PORT`           | `587`                                                      |
-   | `EMAIL_FROM`                  | `Nguyên Tố <no-reply@example.com>`                         |
+   | Biến               | Giá trị                                                                                                              |
+   | ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+   | `DATABASE_URL`      | chuỗi Neon lấy ở bước 1                                                                                               |
+   | `AUTH_SECRET`       | chạy `openssl rand -base64 32` (Windows: xem ghi chú dưới)                                                           |
+   | `AUTH_URL`          | để tạm `https://ten-project.vercel.app` (Vercel cho biết tên chính xác ngay khi Import xong — sửa lại sau nếu cần)  |
+   | `APP_URL`           | giống `AUTH_URL`                                                                                                      |
+   | `EMAIL_SERVER_HOST` | (SMTP thật nếu có, không thì để trống — quên/đặt lại mật khẩu qua email sẽ không gửi được)                           |
+   | `EMAIL_SERVER_PORT` | `587`                                                                                                                 |
+   | `EMAIL_FROM`        | `Nguyên Tố <no-reply@example.com>`                                                                                    |
 
    Windows không có sẵn `openssl` thì tạo `AUTH_SECRET` bằng:
    ```powershell
@@ -159,18 +138,29 @@ file upload).
    Prisma nhờ script `vercel-build`) — theo dõi log ngay trên trang, mất
    khoảng 1-2 phút
 
+### 3. Bật lưu trữ file — Vercel Blob
+
+Chưa làm bước này thì web vẫn chạy được, chỉ riêng phần **upload file sẽ
+không lưu bền** (mất sau lần deploy kế tiếp) — nên làm ngay sau khi deploy
+lần đầu thành công:
+
+1. Trong project vừa deploy trên Vercel → tab **Storage** → **Create
+   Database** → chọn **Blob**
+2. Đặt tên bất kỳ, ở bước chọn quyền truy cập chọn **Private** (không
+   chọn Public — tài liệu cần qua kiểm duyệt mới công khai được)
+3. Bấm **Connect to Project**, chọn đúng project `chemshare` — Vercel tự
+   thêm biến môi trường cần thiết, không cần copy tay
+4. Vào tab **Deployments** → bản mới nhất → dấu 3 chấm → **Redeploy** để
+   deploy lại với biến vừa thêm
+
 ### 4. Sau khi deploy xong
 
 - Vercel cho 1 link dạng `https://ten-project.vercel.app` — vào thử,
   test đăng ký/đăng nhập/upload 1 file xem tải xuống lại được không
-  (xác nhận R2 hoạt động thật, không phải "tưởng chạy" mà đang âm thầm
-  lưu vào ổ đĩa tạm của Vercel — lưu kiểu đó sẽ MẤT file sau lần deploy
-  kế tiếp)
 - Có domain riêng muốn dùng thay vì `.vercel.app`: vào **Settings** →
   **Domains** trong project Vercel, làm theo hướng dẫn (thêm bản ghi DNS
   tại nơi mua domain) — xong thì QUAY LẠI sửa `AUTH_URL`/`APP_URL` ở
-  bước 3 thành domain mới, bấm **Redeploy** (mục "Deployments" → dấu 3
-  chấm → Redeploy)
+  bước 2 thành domain mới, bấm **Redeploy**
 
 ### Cập nhật lên phiên bản mới
 

@@ -471,3 +471,66 @@ tay:**
 khớp CHÍNH XÁC domain thật đang dùng (mục 14) — chỉ khác là giờ domain đó
 do Vercel cấp (`*.vercel.app`) hoặc domain riêng gắn qua Vercel, không
 phải domain tự trỏ DNS vào server như hướng Docker.
+
+## 18. Cloudflare R2 → Vercel Blob — đổi lần 2 vì Cloudflare đòi xác minh thẻ (Giai đoạn 13)
+
+Sau mục 17 (chọn Vercel + Neon + R2), người dùng làm tới bước tạo bucket
+R2 thì Cloudflare đòi xác minh thẻ thanh toán — không muốn nhập dù chỉ để
+xác minh. Đổi tiếp sang **Vercel Blob**: cùng nền tảng đang dùng (Vercel),
+không cần tài khoản/thẻ ngoài nào, tạo store ngay trong dashboard project.
+
+**API xác nhận qua tài liệu Vercel thật (package khá mới, Private Blob
+chỉ mới GA cuối tháng 6/2026 — không dùng trí nhớ huấn luyện):**
+
+```ts
+import { put, get, del } from "@vercel/blob";
+
+// Upload (thay cho S3 PutObjectCommand)
+await put(key, buffer, { access: "private", contentType, addRandomSuffix: false });
+
+// Đọc (thay cho S3 GetObjectCommand) — trả ReadableStream, không phải Buffer
+const result = await get(key, { access: "private" });
+// result === null nếu không tồn tại
+// result.stream — ReadableStream<Uint8Array>
+// result.blob.contentType, .size, .etag, ...
+
+// Xoá (thay cho S3 DeleteObjectCommand)
+await del(key); // nhận thẳng pathname, không bắt buộc truyền access
+```
+
+**3 quyết định thiết kế khi viết lại `lib/storage.ts`:**
+
+1. **`isCloudConfigured` kiểm tra `BLOB_READ_WRITE_TOKEN`** — không phải
+   biến nào khác. Tài liệu Vercel có nhắc tới việc auth tự động qua OIDC
+   khi store đã connect vào project (không cần token tĩnh), nhưng OIDC
+   chỉ hoạt động NGẦM lúc code chạy thật trên hạ tầng Vercel — không có gì
+   để MÌNH tự kiểm tra sự hiện diện của nó lúc code chạy (khác biến môi
+   trường, đọc được trực tiếp). `BLOB_READ_WRITE_TOKEN` vẫn là tín hiệu ổn
+   định, đọc được, và Vercel vẫn hỗ trợ auth theo cách này (không phải bị
+   thay thế hẳn bởi OIDC) — dùng nó làm điều kiện rẽ nhánh cloud/local là
+   lựa chọn chắc chắn nhất.
+
+2. **Bỏ hẳn nhánh presigned-URL-trả-trực-tiếp**, `getDownloadUrl()` giờ
+   LUÔN trả `/api/files/[...key]` bất kể chế độ. Vercel Blob CÓ hỗ trợ
+   Signed URLs tương đương (`issueSignedToken` + `presignUrl`, cũng mới
+   GA đầu tháng 6/2026) nhưng cần thêm 1 lượt gọi API để mint token trước
+   mỗi lần tải — không cần thiết cho quy mô app này. Route nội bộ đơn giản
+   hơn và tái dùng được đúng triết lý bảo mật cũ (key ngẫu nhiên 96-bit
+   không đoán được = vé truy cập, không kiểm tra session lại ở bước phục
+   vụ — quyền quyết định ở NƠI GỌI `getDownloadUrl()`, xem comment gốc
+   trong route). Route `/api/files/[...key]/route.ts` được viết lại để tự
+   đọc đúng nguồn (Vercel Blob qua `get()`, hoặc đĩa cục bộ) tuỳ
+   `storageMode`, cùng 1 route cho cả 2 chế độ thay vì 2 route riêng như
+   thiết kế S3 cũ (S3 mode trước đây bỏ qua hẳn route này, đi thẳng
+   presigned URL).
+
+3. **Trả `ReadableStream` thay vì `Buffer`** từ hàm đọc file — `get()`
+   của Vercel Blob vốn đã trả stream, và `NextResponse` nhận thẳng
+   `ReadableStream` làm body — tận dụng luôn, không cần đọc hết file vào
+   RAM server trước khi gửi (đỡ tốn bộ nhớ với file PDF/PPTX vài chục MB).
+   Nhánh local bọc `Buffer` đọc từ đĩa vào 1 `ReadableStream` 1-chunk để 2
+   nhánh cùng interface, route xử lý sau đó giống hệt nhau bất kể nguồn.
+
+**Đã kiểm tra không có nơi nào khác gọi `readLocalFile` trực tiếp** (grep
+toàn bộ `src/`) trước khi đổi tên/gộp hàm — chỉ `app/api/files/[...key]/route.ts`
+dùng, an toàn để đổi interface mà không sợ vỡ chỗ khác.

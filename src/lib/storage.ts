@@ -1,55 +1,30 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { del, get, put } from "@vercel/blob";
 
 /**
- * Lớp trừu tượng lưu trữ file — chạy trên Cloudflare R2 hoặc AWS S3 khi đã
- * cấu hình đủ biến môi trường STORAGE_*, ngược lại tự động lưu vào ổ đĩa
- * cục bộ (`storage-local/`, đã gitignore) và phục vụ qua
+ * Lớp trừu tượng lưu trữ file — chạy trên Vercel Blob (private store) khi
+ * đã kết nối store vào project (Vercel tự thêm biến
+ * `BLOB_READ_WRITE_TOKEN`), ngược lại tự động lưu vào ổ đĩa cục bộ
+ * (`storage-local/`, đã gitignore) và phục vụ qua
  * `app/api/files/[...key]/route.ts`. Chế độ local giúp test toàn bộ luồng
- * upload/tải xuống ngay mà không cần tài khoản R2/S3 trước — khi deploy
- * thật, chỉ cần điền `.env` là tự chuyển sang cloud, không cần sửa code.
+ * upload/tải xuống ngay mà không cần tài khoản Vercel trước — khi deploy
+ * thật và kết nối Blob store, chỉ cần biến môi trường là tự chuyển sang
+ * cloud, không cần sửa code.
+ *
+ * (Trước đây dùng S3-compatible client cho Cloudflare R2/AWS S3 — đổi
+ * sang Vercel Blob khi chuyển hướng triển khai từ Docker sang Vercel, vì
+ * Vercel Blob không cần tạo thêm tài khoản/dịch vụ ngoài. Xem
+ * NEXTJS_NOTES.md mục 18.)
  */
 
-const REQUIRED_CLOUD_VARS = [
-  "STORAGE_ENDPOINT",
-  "STORAGE_BUCKET",
-  "STORAGE_ACCESS_KEY_ID",
-  "STORAGE_SECRET_ACCESS_KEY",
-] as const;
-
-const isCloudConfigured = REQUIRED_CLOUD_VARS.every(
-  (key) => !!process.env[key],
-);
+const isCloudConfigured = !!process.env.BLOB_READ_WRITE_TOKEN;
 
 export const storageMode: "cloud" | "local" = isCloudConfigured
   ? "cloud"
   : "local";
 
 const LOCAL_STORAGE_DIR = path.join(process.cwd(), "storage-local");
-
-let cachedClient: S3Client | null = null;
-function getClient(): S3Client {
-  if (!cachedClient) {
-    cachedClient = new S3Client({
-      region: process.env.STORAGE_REGION || "auto",
-      endpoint: process.env.STORAGE_ENDPOINT,
-      credentials: {
-        accessKeyId: process.env.STORAGE_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.STORAGE_SECRET_ACCESS_KEY!,
-      },
-      // Bắt buộc cho R2 và phần lớn dịch vụ S3-compatible khác.
-      forcePathStyle: true,
-    });
-  }
-  return cachedClient;
-}
 
 function localPathFor(key: string): string {
   const resolved = path.join(LOCAL_STORAGE_DIR, key);
@@ -67,14 +42,14 @@ export async function uploadFile(
   contentType: string,
 ): Promise<string> {
   if (storageMode === "cloud") {
-    await getClient().send(
-      new PutObjectCommand({
-        Bucket: process.env.STORAGE_BUCKET!,
-        Key: key,
-        Body: buffer,
-        ContentType: contentType,
-      }),
-    );
+    await put(key, buffer, {
+      access: "private",
+      contentType,
+      // key đã là chuỗi ngẫu nhiên 96-bit duy nhất tự sinh từ trước lúc
+      // gọi hàm này (xem app/api/documents/route.ts) — không cần Vercel
+      // Blob thêm suffix ngẫu nhiên nữa.
+      addRandomSuffix: false,
+    });
     return key;
   }
 
@@ -85,40 +60,60 @@ export async function uploadFile(
 }
 
 /**
- * Trả về URL để tải/xem file (presigned URL có hạn dùng nếu cloud, hoặc
- * route nội bộ có kiểm tra đăng nhập nếu đang ở chế độ local).
+ * URL để trình duyệt tải/xem file — LUÔN đi qua route nội bộ
+ * `/api/files/[...key]` bất kể đang ở chế độ nào.
+ *
+ * (Bản trước dùng presigned URL trả trực tiếp từ S3/R2 khi ở chế độ
+ * cloud. Vercel Blob private cũng hỗ trợ signed URL tương đương
+ * (`issueSignedToken`/`presignUrl`), nhưng phức tạp hơn cần thiết cho quy
+ * mô app này — route nội bộ đơn giản hơn và tái dùng được đúng lớp bảo
+ * mật "key ngẫu nhiên không đoán được, không kiểm tra session lại ở bước
+ * phục vụ" đã thiết kế sẵn cho chế độ local, giờ dùng chung cho cả 2 chế
+ * độ. Quyền truy cập vẫn được quyết định ở NƠI GỌI hàm này, xem comment
+ * trong app/api/files/[...key]/route.ts.)
  */
-export async function getDownloadUrl(
-  key: string,
-  expiresInSeconds = 300,
-): Promise<string> {
-  if (storageMode === "cloud") {
-    const command = new GetObjectCommand({
-      Bucket: process.env.STORAGE_BUCKET!,
-      Key: key,
-    });
-    return getSignedUrl(getClient(), command, {
-      expiresIn: expiresInSeconds,
-    });
-  }
-
+export async function getDownloadUrl(key: string): Promise<string> {
   return `/api/files/${key}`;
 }
 
-/** Đọc file trực tiếp từ ổ đĩa cục bộ — chỉ dùng bởi app/api/files/[...key], không dùng ở chế độ cloud. */
-export async function readLocalFile(key: string): Promise<Buffer> {
-  const filePath = localPathFor(key);
-  return readFile(filePath);
+/**
+ * Đọc file thật từ storage (cục bộ hoặc Vercel Blob) — dùng bởi
+ * app/api/files/[...key]/route.ts để stream trả về response. Trả về
+ * ReadableStream (không phải Buffer) để không cần tải nguyên file vào bộ
+ * nhớ server trước khi gửi đi — quan trọng với file lớn (PDF/PPTX vài
+ * chục MB).
+ */
+export async function readStoredFile(key: string): Promise<{
+  stream: ReadableStream<Uint8Array>;
+  contentType: string | null;
+} | null> {
+  if (storageMode === "cloud") {
+    const result = await get(key, { access: "private" });
+    if (!result?.stream) return null;
+    return { stream: result.stream, contentType: result.blob.contentType };
+  }
+
+  try {
+    const buffer = await readFile(localPathFor(key));
+    // Bọc Buffer thành ReadableStream để cùng interface với nhánh cloud —
+    // route xử lý cả 2 nhánh giống hệt nhau ở phía sau hàm này.
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(buffer));
+        controller.close();
+      },
+    });
+    return { stream, contentType: null };
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteFile(key: string): Promise<void> {
   if (storageMode === "cloud") {
-    await getClient().send(
-      new DeleteObjectCommand({
-        Bucket: process.env.STORAGE_BUCKET!,
-        Key: key,
-      }),
-    );
+    // del() của Vercel Blob vốn đã không ném lỗi nếu key không tồn tại —
+    // vẫn catch thêm để lỗi mạng/khác không làm vỡ luồng xoá tài liệu.
+    await del(key).catch(() => {});
     return;
   }
 

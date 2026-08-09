@@ -1,0 +1,598 @@
+diff --git a/.env.example b/.env.example
+index 272333c..b25efdf 100644
+--- a/.env.example
++++ b/.env.example
+@@ -26,18 +26,17 @@ EMAIL_SERVER_USER=""
+ EMAIL_SERVER_PASSWORD=""
+ EMAIL_FROM="Nguyên Tố <no-reply@example.com>"
+ 
+-# --- Lưu trữ file — Cloudflare R2 hoặc AWS S3 (Giai đoạn 4) ---
+-# TÙY CHỌN: để trống cả 4 dòng STORAGE_* bên dưới, hệ thống tự động lưu
+-# file vào thư mục storage-local/ trên đĩa (tiện test, không cần tài
+-# khoản R2/S3 ngay). Khi deploy thật hoặc muốn dùng cloud, điền đủ 4 dòng
+-# là tự chuyển sang R2/S3, không cần sửa code (xem src/lib/storage.ts).
+-STORAGE_PROVIDER="r2" # "r2" hoặc "s3"
+-STORAGE_ENDPOINT=""
+-STORAGE_REGION="auto"
+-STORAGE_BUCKET="chemshare-documents"
+-STORAGE_ACCESS_KEY_ID=""
+-STORAGE_SECRET_ACCESS_KEY=""
+-STORAGE_PUBLIC_URL=""
++# --- Lưu trữ file — Vercel Blob (Giai đoạn 4, đổi từ R2/S3 ở Giai đoạn 13) ---
++# TÙY CHỌN: để trống, hệ thống tự động lưu file vào thư mục
++# storage-local/ trên đĩa (tiện test, không cần tài khoản Vercel ngay).
++# Khi deploy lên Vercel: vào project → Storage → Create Database → Blob →
++# tạo store (chọn Private) → Connect to Project — Vercel TỰ điền biến này
++# vào Environment Variables trên dashboard, không cần copy tay ở đó. Chỉ
++# cần điền tay ở ĐÂY (.env cục bộ) nếu muốn test cloud storage khi chạy
++# `npm run dev` trên máy — lấy giá trị bằng lệnh `vercel env pull` sau khi
++# đã link project (`vercel link`), hoặc copy tay từ Storage → chọn store →
++# Settings → xem token.
++BLOB_READ_WRITE_TOKEN=""
+ 
+ # Giới hạn upload (Giai đoạn 4 / 12)
+ UPLOAD_MAX_SIZE_MB="25"
+diff --git a/NEXTJS_NOTES.md b/NEXTJS_NOTES.md
+index a6d4327..3ed7c9d 100644
+--- a/NEXTJS_NOTES.md
++++ b/NEXTJS_NOTES.md
+@@ -471,3 +471,66 @@ tay:**
+ khớp CHÍNH XÁC domain thật đang dùng (mục 14) — chỉ khác là giờ domain đó
+ do Vercel cấp (`*.vercel.app`) hoặc domain riêng gắn qua Vercel, không
+ phải domain tự trỏ DNS vào server như hướng Docker.
++
++## 18. Cloudflare R2 → Vercel Blob — đổi lần 2 vì Cloudflare đòi xác minh thẻ (Giai đoạn 13)
++
++Sau mục 17 (chọn Vercel + Neon + R2), người dùng làm tới bước tạo bucket
++R2 thì Cloudflare đòi xác minh thẻ thanh toán — không muốn nhập dù chỉ để
++xác minh. Đổi tiếp sang **Vercel Blob**: cùng nền tảng đang dùng (Vercel),
++không cần tài khoản/thẻ ngoài nào, tạo store ngay trong dashboard project.
++
++**API xác nhận qua tài liệu Vercel thật (package khá mới, Private Blob
++chỉ mới GA cuối tháng 6/2026 — không dùng trí nhớ huấn luyện):**
++
++```ts
++import { put, get, del } from "@vercel/blob";
++
++// Upload (thay cho S3 PutObjectCommand)
++await put(key, buffer, { access: "private", contentType, addRandomSuffix: false });
++
++// Đọc (thay cho S3 GetObjectCommand) — trả ReadableStream, không phải Buffer
++const result = await get(key, { access: "private" });
++// result === null nếu không tồn tại
++// result.stream — ReadableStream<Uint8Array>
++// result.blob.contentType, .size, .etag, ...
++
++// Xoá (thay cho S3 DeleteObjectCommand)
++await del(key); // nhận thẳng pathname, không bắt buộc truyền access
++```
++
++**3 quyết định thiết kế khi viết lại `lib/storage.ts`:**
++
++1. **`isCloudConfigured` kiểm tra `BLOB_READ_WRITE_TOKEN`** — không phải
++   biến nào khác. Tài liệu Vercel có nhắc tới việc auth tự động qua OIDC
++   khi store đã connect vào project (không cần token tĩnh), nhưng OIDC
++   chỉ hoạt động NGẦM lúc code chạy thật trên hạ tầng Vercel — không có gì
++   để MÌNH tự kiểm tra sự hiện diện của nó lúc code chạy (khác biến môi
++   trường, đọc được trực tiếp). `BLOB_READ_WRITE_TOKEN` vẫn là tín hiệu ổn
++   định, đọc được, và Vercel vẫn hỗ trợ auth theo cách này (không phải bị
++   thay thế hẳn bởi OIDC) — dùng nó làm điều kiện rẽ nhánh cloud/local là
++   lựa chọn chắc chắn nhất.
++
++2. **Bỏ hẳn nhánh presigned-URL-trả-trực-tiếp**, `getDownloadUrl()` giờ
++   LUÔN trả `/api/files/[...key]` bất kể chế độ. Vercel Blob CÓ hỗ trợ
++   Signed URLs tương đương (`issueSignedToken` + `presignUrl`, cũng mới
++   GA đầu tháng 6/2026) nhưng cần thêm 1 lượt gọi API để mint token trước
++   mỗi lần tải — không cần thiết cho quy mô app này. Route nội bộ đơn giản
++   hơn và tái dùng được đúng triết lý bảo mật cũ (key ngẫu nhiên 96-bit
++   không đoán được = vé truy cập, không kiểm tra session lại ở bước phục
++   vụ — quyền quyết định ở NƠI GỌI `getDownloadUrl()`, xem comment gốc
++   trong route). Route `/api/files/[...key]/route.ts` được viết lại để tự
++   đọc đúng nguồn (Vercel Blob qua `get()`, hoặc đĩa cục bộ) tuỳ
++   `storageMode`, cùng 1 route cho cả 2 chế độ thay vì 2 route riêng như
++   thiết kế S3 cũ (S3 mode trước đây bỏ qua hẳn route này, đi thẳng
++   presigned URL).
++
++3. **Trả `ReadableStream` thay vì `Buffer`** từ hàm đọc file — `get()`
++   của Vercel Blob vốn đã trả stream, và `NextResponse` nhận thẳng
++   `ReadableStream` làm body — tận dụng luôn, không cần đọc hết file vào
++   RAM server trước khi gửi (đỡ tốn bộ nhớ với file PDF/PPTX vài chục MB).
++   Nhánh local bọc `Buffer` đọc từ đĩa vào 1 `ReadableStream` 1-chunk để 2
++   nhánh cùng interface, route xử lý sau đó giống hệt nhau bất kể nguồn.
++
++**Đã kiểm tra không có nơi nào khác gọi `readLocalFile` trực tiếp** (grep
++toàn bộ `src/`) trước khi đổi tên/gộp hàm — chỉ `app/api/files/[...key]/route.ts`
++dùng, an toàn để đổi interface mà không sợ vỡ chỗ khác.
+diff --git a/README.md b/README.md
+index 8d4199e..9ffffda 100644
+--- a/README.md
++++ b/README.md
+@@ -16,9 +16,9 @@ người tự học. Tài liệu chỉ công khai sau khi được kiểm duyệ
+ | Database     | PostgreSQL                                              |
+ | ORM          | Prisma                                                   |
+ | Xác thực     | Auth.js (NextAuth)                                       |
+-| Lưu trữ file | Cloudflare R2 / AWS S3                                   |
++| Lưu trữ file | Vercel Blob                                              |
+ | Tìm kiếm     | PostgreSQL Full Text Search                              |
+-| Triển khai   | Docker + VPS hoặc Vercel                                 |
++| Triển khai   | Vercel                                                    |
+ 
+ ## Bắt đầu (môi trường phát triển)
+ 
+@@ -87,20 +87,19 @@ thực/đặt lại mật khẩu sẽ được **in thẳng ra terminal** đang
+ `npm run dev` (kèm link để bấm), không cần SMTP thật để test luồng đăng
+ ký/quên mật khẩu.
+ 
+-### Chưa cấu hình Cloudflare R2 / AWS S3?
++### Chưa cấu hình Vercel Blob?
+ 
+-Cũng không sao — khi chưa điền đủ 4 biến `STORAGE_*` trong `.env`, file
++Cũng không sao — khi chưa điền `BLOB_READ_WRITE_TOKEN` trong `.env`, file
+ đăng tải (`/upload`) sẽ tự động lưu vào thư mục `storage-local/` trên đĩa
+-thay vì R2/S3 thật. Test được toàn bộ luồng đăng tải/tải xuống ngay; khi
+-nào deploy thật hoặc muốn dùng cloud, điền đủ 4 biến đó vào `.env` là tự
+-chuyển sang R2/S3, không cần sửa code gì thêm.
++thay vì Vercel Blob thật. Test được toàn bộ luồng đăng tải/tải xuống
++ngay; khi nào deploy thật lên Vercel và kết nối Blob store vào project,
++Vercel tự điền biến này, không cần sửa code gì thêm.
+ 
+-## Triển khai (production) — Vercel + Neon + Cloudflare R2
++## Triển khai (production) — Vercel + Neon
+ 
+-Không cần server riêng, không cần Docker/SSH — chỉ cần 3 tài khoản miễn
+-phí: [Vercel](https://vercel.com) (host code), [Neon](https://neon.tech)
+-(database Postgres), [Cloudflare R2](https://dash.cloudflare.com) (lưu
+-file upload).
++Không cần server riêng, không cần Docker/SSH — chỉ cần 2 tài khoản miễn
++phí: [Vercel](https://vercel.com) (host code + lưu file) và
++[Neon](https://neon.tech) (database Postgres).
+ 
+ ### 1. Tạo database trên Neon
+ 
+@@ -109,23 +108,9 @@ file upload).
+    (KHÔNG chọn "Direct connection" — pooled mới chịu được nhiều kết nối
+    đồng thời như Vercel serverless tạo ra)
+ 3. Copy chuỗi dạng `postgresql://...@ep-xxx-pooler.../neondb?sslmode=require`
+-   — đây là giá trị `DATABASE_URL` sẽ dùng ở bước 4
++   — đây là giá trị `DATABASE_URL` sẽ dùng ở bước 2
+ 
+-### 2. Tạo bucket lưu file trên Cloudflare R2
+-
+-1. Đăng nhập [dash.cloudflare.com](https://dash.cloudflare.com) → menu
+-   **R2 Object Storage** → **Create bucket**, đặt tên bất kỳ (vd.
+-   `chemshare-documents`)
+-2. Vào bucket vừa tạo → **Settings** → **Public access** → bật
+-   **Allow public access** qua "R2.dev subdomain" → copy URL dạng
+-   `https://pub-xxxx.r2.dev` (đây là `STORAGE_PUBLIC_URL`)
+-3. Quay lại trang R2 chính → **Manage API tokens** → **Create API token**
+-   → quyền **Object Read & Write**, giới hạn đúng bucket vừa tạo → tạo
+-   xong sẽ hiện **Access Key ID**, **Secret Access Key**, và **Endpoint**
+-   (dạng `https://<account-id>.r2.cloudflarestorage.com`) — copy cả 3,
+-   **chỉ hiện 1 lần**, đóng trang là mất
+-
+-### 3. Đưa code lên Vercel
++### 2. Đưa code lên Vercel
+ 
+ 1. Đăng ký/đăng nhập [vercel.com](https://vercel.com) bằng tài khoản
+    GitHub
+@@ -133,21 +118,15 @@ file upload).
+ 3. ĐỪNG bấm Deploy vội — bấm **Environment Variables**, thêm từng dòng
+    (tên biến bên trái, giá trị bên phải):
+ 
+-   | Biến                        | Giá trị                                                  |
+-   | --------------------------- | --------------------------------------------------------- |
+-   | `DATABASE_URL`               | chuỗi Neon lấy ở bước 1                                    |
+-   | `AUTH_SECRET`                 | chạy `openssl rand -base64 32` (Windows: xem ghi chú dưới) |
+-   | `AUTH_URL`                   | để tạm `https://ten-project.vercel.app` (Vercel cho biết tên chính xác ngay khi Import xong — sửa lại sau nếu cần) |
+-   | `APP_URL`                     | giống `AUTH_URL`                                           |
+-   | `STORAGE_ENDPOINT`            | Endpoint lấy ở bước 2                                      |
+-   | `STORAGE_BUCKET`              | tên bucket ở bước 2                                        |
+-   | `STORAGE_ACCESS_KEY_ID`       | Access Key ID ở bước 2                                     |
+-   | `STORAGE_SECRET_ACCESS_KEY`   | Secret Access Key ở bước 2                                 |
+-   | `STORAGE_PUBLIC_URL`          | URL public ở bước 2                                        |
+-   | `STORAGE_REGION`              | `auto`                                                     |
+-   | `EMAIL_SERVER_HOST`           | (SMTP thật nếu có, không thì để trống — quên/đặt lại mật khẩu qua email sẽ không gửi được) |
+-   | `EMAIL_SERVER_PORT`           | `587`                                                      |
+-   | `EMAIL_FROM`                  | `Nguyên Tố <no-reply@example.com>`                         |
++   | Biến               | Giá trị                                                                                                              |
++   | ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
++   | `DATABASE_URL`      | chuỗi Neon lấy ở bước 1                                                                                               |
++   | `AUTH_SECRET`       | chạy `openssl rand -base64 32` (Windows: xem ghi chú dưới)                                                           |
++   | `AUTH_URL`          | để tạm `https://ten-project.vercel.app` (Vercel cho biết tên chính xác ngay khi Import xong — sửa lại sau nếu cần)  |
++   | `APP_URL`           | giống `AUTH_URL`                                                                                                      |
++   | `EMAIL_SERVER_HOST` | (SMTP thật nếu có, không thì để trống — quên/đặt lại mật khẩu qua email sẽ không gửi được)                           |
++   | `EMAIL_SERVER_PORT` | `587`                                                                                                                 |
++   | `EMAIL_FROM`        | `Nguyên Tố <no-reply@example.com>`                                                                                    |
+ 
+    Windows không có sẵn `openssl` thì tạo `AUTH_SECRET` bằng:
+    ```powershell
+@@ -159,18 +138,29 @@ file upload).
+    Prisma nhờ script `vercel-build`) — theo dõi log ngay trên trang, mất
+    khoảng 1-2 phút
+ 
++### 3. Bật lưu trữ file — Vercel Blob
++
++Chưa làm bước này thì web vẫn chạy được, chỉ riêng phần **upload file sẽ
++không lưu bền** (mất sau lần deploy kế tiếp) — nên làm ngay sau khi deploy
++lần đầu thành công:
++
++1. Trong project vừa deploy trên Vercel → tab **Storage** → **Create
++   Database** → chọn **Blob**
++2. Đặt tên bất kỳ, ở bước chọn quyền truy cập chọn **Private** (không
++   chọn Public — tài liệu cần qua kiểm duyệt mới công khai được)
++3. Bấm **Connect to Project**, chọn đúng project `chemshare` — Vercel tự
++   thêm biến môi trường cần thiết, không cần copy tay
++4. Vào tab **Deployments** → bản mới nhất → dấu 3 chấm → **Redeploy** để
++   deploy lại với biến vừa thêm
++
+ ### 4. Sau khi deploy xong
+ 
+ - Vercel cho 1 link dạng `https://ten-project.vercel.app` — vào thử,
+   test đăng ký/đăng nhập/upload 1 file xem tải xuống lại được không
+-  (xác nhận R2 hoạt động thật, không phải "tưởng chạy" mà đang âm thầm
+-  lưu vào ổ đĩa tạm của Vercel — lưu kiểu đó sẽ MẤT file sau lần deploy
+-  kế tiếp)
+ - Có domain riêng muốn dùng thay vì `.vercel.app`: vào **Settings** →
+   **Domains** trong project Vercel, làm theo hướng dẫn (thêm bản ghi DNS
+   tại nơi mua domain) — xong thì QUAY LẠI sửa `AUTH_URL`/`APP_URL` ở
+-  bước 3 thành domain mới, bấm **Redeploy** (mục "Deployments" → dấu 3
+-  chấm → Redeploy)
++  bước 2 thành domain mới, bấm **Redeploy**
+ 
+ ### Cập nhật lên phiên bản mới
+ 
+diff --git a/ROADMAP.md b/ROADMAP.md
+index 1daf2c1..dd0e7ab 100644
+--- a/ROADMAP.md
++++ b/ROADMAP.md
+@@ -98,6 +98,9 @@ thao tác thuộc quản lý tài khoản hơn là xác thực.
+       S3) khi đã cấu hình đủ biến `STORAGE_*`; **tự động rơi về lưu đĩa cục
+       bộ** (`storage-local/`) khi chưa cấu hình — test được toàn bộ luồng
+       upload/tải ngay, không cần tài khoản R2/S3 trước
++      _(Cập nhật Giai đoạn 13: đổi sang Vercel Blob khi chuyển hướng triển
++      khai từ Docker sang Vercel — xem Giai đoạn 13 + NEXTJS_NOTES.md mục
++      18. `storage-local/` fallback vẫn giữ nguyên hành vi.)_
+ - [x] `app/api/files/[...key]/route.ts` — phục vụ file ở chế độ local,
+       yêu cầu đăng nhập + chặn path traversal
+ - [x] `POST /api/documents`: validate metadata (Zod), **kiểm tra loại file
+@@ -353,11 +356,14 @@ dark mode, tối ưu tốc độ) vẫn nằm ở Giai đoạn 11 như kế ho
+ 
+ ## ✅ Giai đoạn 13 — Đóng gói & triển khai (hoàn tất phần code — cần deploy Vercel thật để xác nhận)
+ 
+-**Đổi hướng giữa chừng:** bản đầu làm Docker + Caddy tự host (còn trong
+-lịch sử git, commit "Giai Đoạn 13"), nhưng người dùng không có kinh
+-nghiệm quản trị server (SSH/Docker quá phức tạp với người mới) nên đã
+-chuyển sang **Vercel + Neon + Cloudflare R2** — không cần server tự quản,
+-tất cả đều có gói miễn phí, không cần biết Docker/SSH.
++**Đổi hướng 2 LẦN giữa chừng:** bản đầu làm Docker + Caddy tự host (còn
++trong lịch sử git, commit "Giai Đoạn 13"), nhưng người dùng không có
++kinh nghiệm quản trị server (SSH/Docker quá phức tạp với người mới) nên
++chuyển sang **Vercel + Neon + Cloudflare R2**. Lúc làm tới bước tạo R2
++thì Cloudflare đòi xác minh thẻ, người dùng không muốn nhập thẻ — đổi
++tiếp lần 2 sang **Vercel Blob** (kho lưu file của chính Vercel, không
++cần tài khoản/thẻ ngoài nào cả). Bản cuối: **Vercel + Neon + Vercel
++Blob**.
+ 
+ - [x] **`next.config.ts`**: bỏ `output: "standalone"` (chỉ cần cho tự
+       host bằng Docker — Vercel có cơ chế build/deploy riêng, giữ dòng
+@@ -367,24 +373,37 @@ tất cả đều có gói miễn phí, không cần biết Docker/SSH.
+       tự chạy sau `npm install`, không cần nhớ chạy tay) và
+       `vercel-build: "prisma migrate deploy && next build"` (Vercel tự
+       dùng script này thay vì `build` nếu có — tự áp migration Prisma
+-      trước khi build mỗi lần deploy, không cần bước thủ công riêng)
++      trước khi build mỗi lần deploy, không cần bước thủ công riêng).
++      Đổi dependency: bỏ `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`
++      (không dùng S3-style nữa), thêm `@vercel/blob`
+ - [x] Đã xoá `Dockerfile`, `docker-compose.yml`, `.dockerignore`,
+       `.env.production.example` (không dùng nữa với hướng Vercel) — vẫn
+       còn trong lịch sử git nếu sau này muốn quay lại tự host
++- [x] **`src/lib/storage.ts`** viết lại hoàn toàn — S3-compatible client
++      (R2/AWS S3) → Vercel Blob (`put`/`get`/`del`, private store). API
++      đã xác nhận qua tài liệu Vercel thật lúc làm (không đoán, package
++      này khá mới — Private Blob mới GA cuối tháng 6/2026). `getDownloadUrl()`
++      đơn giản hoá: LUÔN trả về route nội bộ `/api/files/[...key]` bất kể
++      chế độ (bỏ nhánh presigned-URL-trực-tiếp cũ), route đó được viết lại
++      để đọc từ Vercel Blob hoặc đĩa cục bộ tuỳ `storageMode`, giữ nguyên
++      triết lý bảo mật cũ ("key ngẫu nhiên không đoán được" thay vì kiểm
++      tra session ở bước phục vụ — xem comment trong chính route). Chi
++      tiết đầy đủ ở NEXTJS_NOTES.md mục 18
+ - [x] **`src/app/api/health/route.ts`** — giữ lại dù không bắt buộc với
+       Vercel (Vercel có dashboard theo dõi riêng), vẫn hữu ích để tự kiểm
+       tra nhanh kết nối DB qua trình duyệt
+-- [x] **`README.md`**: viết lại phần "Triển khai" theo Vercel + Neon + R2,
+-      từng bước cho người mới (tạo tài khoản, lấy connection string, tạo
+-      bucket...)
++- [x] **`README.md`**: viết lại phần "Triển khai" theo Vercel + Neon +
++      Vercel Blob, từng bước cho người mới (tạo tài khoản Neon, tạo Blob
++      store ngay trong Vercel dashboard, deploy)
+ - [ ] **Chưa deploy thật lên Vercel để xác nhận** — cần người dùng tự làm
+       theo README, đặc biệt kiểm tra:
+       - Build trên Vercel thành công (xem tab "Deployments" → log build)
+       - Đăng nhập/đăng ký hoạt động (test kỹ AUTH_URL khớp đúng domain
+         Vercel cấp, xem NEXTJS_NOTES.md mục 14)
+-      - Upload 1 file thật, xác nhận tải xuống lại được (xác nhận R2
+-        hoạt động, không phải đang âm thầm dùng fallback lưu cục bộ —
+-        Vercel sẽ mất file này sau lần deploy kế tiếp nếu R2 chưa đúng)
++      - Upload 1 file thật, xác nhận tải xuống lại được (xác nhận Vercel
++        Blob hoạt động, không phải đang âm thầm dùng fallback lưu cục bộ —
++        Vercel sẽ mất file này sau lần deploy kế tiếp nếu Blob store chưa
++        được connect vào project đúng cách)
+       - Rate limiting đăng nhập sai nhiều lần — chấp nhận có thể không
+         chính xác 100% trên Vercel serverless (nhiều instance chạy song
+         song không chia sẻ bộ nhớ), xem NEXTJS_NOTES.md mục 17
+diff --git a/package.json b/package.json
+index d95d895..3965130 100644
+--- a/package.json
++++ b/package.json
+@@ -18,14 +18,13 @@
+     "db:deploy": "prisma migrate deploy"
+   },
+   "dependencies": {
+-    "@aws-sdk/client-s3": "^3.1085.0",
+-    "@aws-sdk/s3-request-presigner": "^3.1085.0",
+     "@fontsource/ibm-plex-mono": "^5.2.7",
+     "@fontsource/ibm-plex-sans": "^5.2.8",
+     "@fontsource/source-serif-4": "^5.2.9",
+     "@node-rs/argon2": "^2.0.2",
+     "@prisma/adapter-pg": "^7.8.0",
+     "@prisma/client": "^7.8.0",
++    "@vercel/blob": "^2.6.1",
+     "class-variance-authority": "^0.7.1",
+     "clsx": "^2.1.1",
+     "dotenv": "^17.4.2",
+diff --git a/src/app/api/files/[...key]/route.ts b/src/app/api/files/[...key]/route.ts
+index aa1cd1d..c104eff 100644
+--- a/src/app/api/files/[...key]/route.ts
++++ b/src/app/api/files/[...key]/route.ts
+@@ -1,41 +1,39 @@
+ import { NextResponse } from "next/server";
+-import { readLocalFile, storageMode } from "@/lib/storage";
++import { readStoredFile } from "@/lib/storage";
+ 
+ /**
+- * Chỉ thực sự phục vụ file khi storage đang ở chế độ "local" (chưa cấu
+- * hình R2/S3 — xem lib/storage.ts). Ở chế độ "cloud", tải file luôn đi
+- * qua presigned URL trực tiếp từ R2/S3, route này sẽ không được gọi tới.
++ * Phục vụ file cho cả 2 chế độ storage (local lẫn Vercel Blob "cloud") —
++ * xem lib/storage.ts.
+  *
+- * CỐ Ý không kiểm tra đăng nhập ở đây: một presigned URL S3/R2 thật, một
+- * khi đã được server sinh ra, cũng không tự xác thực lại danh tính người
+- * bấm vào link — quyền truy cập được quyết định ở NƠI GỌI
+- * `getDownloadUrl()` (vd. trang chi tiết tài liệu chỉ gọi hàm này cho
+- * tài liệu đã duyệt hoặc khi người dùng có quyền xem; API tải xuống chỉ
+- * gọi hàm này sau khi đã xác thực đăng nhập). Route này chỉ đóng vai trò
+- * tương đương "ổ chứa" — bảo vệ bằng key ngẫu nhiên 96-bit không đoán
+- * được (xem lib/storage.ts), không phải bằng session ở bước phục vụ.
++ * CỐ Ý không kiểm tra đăng nhập ở đây: quyền truy cập được quyết định ở
++ * NƠI GỌI `getDownloadUrl()` (vd. trang chi tiết tài liệu chỉ gọi hàm này
++ * cho tài liệu đã duyệt hoặc khi người dùng có quyền xem; API tải xuống
++ * chỉ gọi hàm này sau khi đã xác thực đăng nhập). Route này chỉ đóng vai
++ * trò tương đương "ổ chứa" — bảo vệ bằng key ngẫu nhiên 96-bit không đoán
++ * được (xem lib/storage.ts), không phải bằng session ở bước phục vụ. Đây
++ * là thiết kế có chủ đích, giống hệt cách 1 presigned URL S3/Vercel Blob
++ * signed URL hoạt động: bản thân URL đã LÀ vé truy cập, không xác thực
++ * lại danh tính người bấm vào link.
+  */
+ export async function GET(
+   request: Request,
+   { params }: { params: Promise<{ key: string[] }> },
+ ) {
+-  if (storageMode !== "local") {
+-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+-  }
+-
+   const { key } = await params;
+ 
+-  try {
+-    const buffer = await readLocalFile(key.join("/"));
+-    const fileName = key[key.length - 1] ?? "file";
+-    return new NextResponse(new Uint8Array(buffer), {
+-      headers: {
+-        "Content-Type": "application/octet-stream",
+-        "Content-Disposition": `inline; filename="${encodeURIComponent(fileName)}"`,
+-        "Cache-Control": "private, max-age=0, no-cache",
+-      },
+-    });
+-  } catch {
++  const file = await readStoredFile(key.join("/"));
++  if (!file) {
+     return NextResponse.json({ error: "not_found" }, { status: 404 });
+   }
++
++  const fileName = key[key.length - 1] ?? "file";
++  return new NextResponse(file.stream, {
++    headers: {
++      "Content-Type": file.contentType ?? "application/octet-stream",
++      "Content-Disposition": `inline; filename="${encodeURIComponent(fileName)}"`,
++      // File có thể chứa nội dung nhạy cảm chờ duyệt — không cho cache ở
++      // đâu ngoài chính trình duyệt người xem, luôn revalidate lại.
++      "Cache-Control": "private, max-age=0, no-cache",
++    },
++  });
+ }
+diff --git a/src/lib/storage.ts b/src/lib/storage.ts
+index 6337b11..cbc107e 100644
+--- a/src/lib/storage.ts
++++ b/src/lib/storage.ts
+@@ -1,32 +1,24 @@
+ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+ import path from "node:path";
+-import {
+-  DeleteObjectCommand,
+-  GetObjectCommand,
+-  PutObjectCommand,
+-  S3Client,
+-} from "@aws-sdk/client-s3";
+-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
++import { del, get, put } from "@vercel/blob";
+ 
+ /**
+- * Lớp trừu tượng lưu trữ file — chạy trên Cloudflare R2 hoặc AWS S3 khi đã
+- * cấu hình đủ biến môi trường STORAGE_*, ngược lại tự động lưu vào ổ đĩa
+- * cục bộ (`storage-local/`, đã gitignore) và phục vụ qua
++ * Lớp trừu tượng lưu trữ file — chạy trên Vercel Blob (private store) khi
++ * đã kết nối store vào project (Vercel tự thêm biến
++ * `BLOB_READ_WRITE_TOKEN`), ngược lại tự động lưu vào ổ đĩa cục bộ
++ * (`storage-local/`, đã gitignore) và phục vụ qua
+  * `app/api/files/[...key]/route.ts`. Chế độ local giúp test toàn bộ luồng
+- * upload/tải xuống ngay mà không cần tài khoản R2/S3 trước — khi deploy
+- * thật, chỉ cần điền `.env` là tự chuyển sang cloud, không cần sửa code.
++ * upload/tải xuống ngay mà không cần tài khoản Vercel trước — khi deploy
++ * thật và kết nối Blob store, chỉ cần biến môi trường là tự chuyển sang
++ * cloud, không cần sửa code.
++ *
++ * (Trước đây dùng S3-compatible client cho Cloudflare R2/AWS S3 — đổi
++ * sang Vercel Blob khi chuyển hướng triển khai từ Docker sang Vercel, vì
++ * Vercel Blob không cần tạo thêm tài khoản/dịch vụ ngoài. Xem
++ * NEXTJS_NOTES.md mục 18.)
+  */
+ 
+-const REQUIRED_CLOUD_VARS = [
+-  "STORAGE_ENDPOINT",
+-  "STORAGE_BUCKET",
+-  "STORAGE_ACCESS_KEY_ID",
+-  "STORAGE_SECRET_ACCESS_KEY",
+-] as const;
+-
+-const isCloudConfigured = REQUIRED_CLOUD_VARS.every(
+-  (key) => !!process.env[key],
+-);
++const isCloudConfigured = !!process.env.BLOB_READ_WRITE_TOKEN;
+ 
+ export const storageMode: "cloud" | "local" = isCloudConfigured
+   ? "cloud"
+@@ -34,23 +26,6 @@ export const storageMode: "cloud" | "local" = isCloudConfigured
+ 
+ const LOCAL_STORAGE_DIR = path.join(process.cwd(), "storage-local");
+ 
+-let cachedClient: S3Client | null = null;
+-function getClient(): S3Client {
+-  if (!cachedClient) {
+-    cachedClient = new S3Client({
+-      region: process.env.STORAGE_REGION || "auto",
+-      endpoint: process.env.STORAGE_ENDPOINT,
+-      credentials: {
+-        accessKeyId: process.env.STORAGE_ACCESS_KEY_ID!,
+-        secretAccessKey: process.env.STORAGE_SECRET_ACCESS_KEY!,
+-      },
+-      // Bắt buộc cho R2 và phần lớn dịch vụ S3-compatible khác.
+-      forcePathStyle: true,
+-    });
+-  }
+-  return cachedClient;
+-}
+-
+ function localPathFor(key: string): string {
+   const resolved = path.join(LOCAL_STORAGE_DIR, key);
+   // Chống path traversal (vd. key chứa "../../etc/passwd").
+@@ -67,14 +42,14 @@ export async function uploadFile(
+   contentType: string,
+ ): Promise<string> {
+   if (storageMode === "cloud") {
+-    await getClient().send(
+-      new PutObjectCommand({
+-        Bucket: process.env.STORAGE_BUCKET!,
+-        Key: key,
+-        Body: buffer,
+-        ContentType: contentType,
+-      }),
+-    );
++    await put(key, buffer, {
++      access: "private",
++      contentType,
++      // key đã là chuỗi ngẫu nhiên 96-bit duy nhất tự sinh từ trước lúc
++      // gọi hàm này (xem app/api/documents/route.ts) — không cần Vercel
++      // Blob thêm suffix ngẫu nhiên nữa.
++      addRandomSuffix: false,
++    });
+     return key;
+   }
+ 
+@@ -85,40 +60,60 @@ export async function uploadFile(
+ }
+ 
+ /**
+- * Trả về URL để tải/xem file (presigned URL có hạn dùng nếu cloud, hoặc
+- * route nội bộ có kiểm tra đăng nhập nếu đang ở chế độ local).
++ * URL để trình duyệt tải/xem file — LUÔN đi qua route nội bộ
++ * `/api/files/[...key]` bất kể đang ở chế độ nào.
++ *
++ * (Bản trước dùng presigned URL trả trực tiếp từ S3/R2 khi ở chế độ
++ * cloud. Vercel Blob private cũng hỗ trợ signed URL tương đương
++ * (`issueSignedToken`/`presignUrl`), nhưng phức tạp hơn cần thiết cho quy
++ * mô app này — route nội bộ đơn giản hơn và tái dùng được đúng lớp bảo
++ * mật "key ngẫu nhiên không đoán được, không kiểm tra session lại ở bước
++ * phục vụ" đã thiết kế sẵn cho chế độ local, giờ dùng chung cho cả 2 chế
++ * độ. Quyền truy cập vẫn được quyết định ở NƠI GỌI hàm này, xem comment
++ * trong app/api/files/[...key]/route.ts.)
+  */
+-export async function getDownloadUrl(
+-  key: string,
+-  expiresInSeconds = 300,
+-): Promise<string> {
+-  if (storageMode === "cloud") {
+-    const command = new GetObjectCommand({
+-      Bucket: process.env.STORAGE_BUCKET!,
+-      Key: key,
+-    });
+-    return getSignedUrl(getClient(), command, {
+-      expiresIn: expiresInSeconds,
+-    });
+-  }
+-
++export async function getDownloadUrl(key: string): Promise<string> {
+   return `/api/files/${key}`;
+ }
+ 
+-/** Đọc file trực tiếp từ ổ đĩa cục bộ — chỉ dùng bởi app/api/files/[...key], không dùng ở chế độ cloud. */
+-export async function readLocalFile(key: string): Promise<Buffer> {
+-  const filePath = localPathFor(key);
+-  return readFile(filePath);
++/**
++ * Đọc file thật từ storage (cục bộ hoặc Vercel Blob) — dùng bởi
++ * app/api/files/[...key]/route.ts để stream trả về response. Trả về
++ * ReadableStream (không phải Buffer) để không cần tải nguyên file vào bộ
++ * nhớ server trước khi gửi đi — quan trọng với file lớn (PDF/PPTX vài
++ * chục MB).
++ */
++export async function readStoredFile(key: string): Promise<{
++  stream: ReadableStream<Uint8Array>;
++  contentType: string | null;
++} | null> {
++  if (storageMode === "cloud") {
++    const result = await get(key, { access: "private" });
++    if (!result?.stream) return null;
++    return { stream: result.stream, contentType: result.blob.contentType };
++  }
++
++  try {
++    const buffer = await readFile(localPathFor(key));
++    // Bọc Buffer thành ReadableStream để cùng interface với nhánh cloud —
++    // route xử lý cả 2 nhánh giống hệt nhau ở phía sau hàm này.
++    const stream = new ReadableStream<Uint8Array>({
++      start(controller) {
++        controller.enqueue(new Uint8Array(buffer));
++        controller.close();
++      },
++    });
++    return { stream, contentType: null };
++  } catch {
++    return null;
++  }
+ }
+ 
+ export async function deleteFile(key: string): Promise<void> {
+   if (storageMode === "cloud") {
+-    await getClient().send(
+-      new DeleteObjectCommand({
+-        Bucket: process.env.STORAGE_BUCKET!,
+-        Key: key,
+-      }),
+-    );
++    // del() của Vercel Blob vốn đã không ném lỗi nếu key không tồn tại —
++    // vẫn catch thêm để lỗi mạng/khác không làm vỡ luồng xoá tài liệu.
++    await del(key).catch(() => {});
+     return;
+   }
+ 

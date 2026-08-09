@@ -98,6 +98,9 @@ thao tác thuộc quản lý tài khoản hơn là xác thực.
       S3) khi đã cấu hình đủ biến `STORAGE_*`; **tự động rơi về lưu đĩa cục
       bộ** (`storage-local/`) khi chưa cấu hình — test được toàn bộ luồng
       upload/tải ngay, không cần tài khoản R2/S3 trước
+      _(Cập nhật Giai đoạn 13: đổi sang Vercel Blob khi chuyển hướng triển
+      khai từ Docker sang Vercel — xem Giai đoạn 13 + NEXTJS_NOTES.md mục
+      18. `storage-local/` fallback vẫn giữ nguyên hành vi.)_
 - [x] `app/api/files/[...key]/route.ts` — phục vụ file ở chế độ local,
       yêu cầu đăng nhập + chặn path traversal
 - [x] `POST /api/documents`: validate metadata (Zod), **kiểm tra loại file
@@ -353,11 +356,14 @@ dark mode, tối ưu tốc độ) vẫn nằm ở Giai đoạn 11 như kế ho�
 
 ## ✅ Giai đoạn 13 — Đóng gói & triển khai (hoàn tất phần code — cần deploy Vercel thật để xác nhận)
 
-**Đổi hướng giữa chừng:** bản đầu làm Docker + Caddy tự host (còn trong
-lịch sử git, commit "Giai Đoạn 13"), nhưng người dùng không có kinh
-nghiệm quản trị server (SSH/Docker quá phức tạp với người mới) nên đã
-chuyển sang **Vercel + Neon + Cloudflare R2** — không cần server tự quản,
-tất cả đều có gói miễn phí, không cần biết Docker/SSH.
+**Đổi hướng 2 LẦN giữa chừng:** bản đầu làm Docker + Caddy tự host (còn
+trong lịch sử git, commit "Giai Đoạn 13"), nhưng người dùng không có
+kinh nghiệm quản trị server (SSH/Docker quá phức tạp với người mới) nên
+chuyển sang **Vercel + Neon + Cloudflare R2**. Lúc làm tới bước tạo R2
+thì Cloudflare đòi xác minh thẻ, người dùng không muốn nhập thẻ — đổi
+tiếp lần 2 sang **Vercel Blob** (kho lưu file của chính Vercel, không
+cần tài khoản/thẻ ngoài nào cả). Bản cuối: **Vercel + Neon + Vercel
+Blob**.
 
 - [x] **`next.config.ts`**: bỏ `output: "standalone"` (chỉ cần cho tự
       host bằng Docker — Vercel có cơ chế build/deploy riêng, giữ dòng
@@ -367,24 +373,37 @@ tất cả đều có gói miễn phí, không cần biết Docker/SSH.
       tự chạy sau `npm install`, không cần nhớ chạy tay) và
       `vercel-build: "prisma migrate deploy && next build"` (Vercel tự
       dùng script này thay vì `build` nếu có — tự áp migration Prisma
-      trước khi build mỗi lần deploy, không cần bước thủ công riêng)
+      trước khi build mỗi lần deploy, không cần bước thủ công riêng).
+      Đổi dependency: bỏ `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`
+      (không dùng S3-style nữa), thêm `@vercel/blob`
 - [x] Đã xoá `Dockerfile`, `docker-compose.yml`, `.dockerignore`,
       `.env.production.example` (không dùng nữa với hướng Vercel) — vẫn
       còn trong lịch sử git nếu sau này muốn quay lại tự host
+- [x] **`src/lib/storage.ts`** viết lại hoàn toàn — S3-compatible client
+      (R2/AWS S3) → Vercel Blob (`put`/`get`/`del`, private store). API
+      đã xác nhận qua tài liệu Vercel thật lúc làm (không đoán, package
+      này khá mới — Private Blob mới GA cuối tháng 6/2026). `getDownloadUrl()`
+      đơn giản hoá: LUÔN trả về route nội bộ `/api/files/[...key]` bất kể
+      chế độ (bỏ nhánh presigned-URL-trực-tiếp cũ), route đó được viết lại
+      để đọc từ Vercel Blob hoặc đĩa cục bộ tuỳ `storageMode`, giữ nguyên
+      triết lý bảo mật cũ ("key ngẫu nhiên không đoán được" thay vì kiểm
+      tra session ở bước phục vụ — xem comment trong chính route). Chi
+      tiết đầy đủ ở NEXTJS_NOTES.md mục 18
 - [x] **`src/app/api/health/route.ts`** — giữ lại dù không bắt buộc với
       Vercel (Vercel có dashboard theo dõi riêng), vẫn hữu ích để tự kiểm
       tra nhanh kết nối DB qua trình duyệt
-- [x] **`README.md`**: viết lại phần "Triển khai" theo Vercel + Neon + R2,
-      từng bước cho người mới (tạo tài khoản, lấy connection string, tạo
-      bucket...)
+- [x] **`README.md`**: viết lại phần "Triển khai" theo Vercel + Neon +
+      Vercel Blob, từng bước cho người mới (tạo tài khoản Neon, tạo Blob
+      store ngay trong Vercel dashboard, deploy)
 - [ ] **Chưa deploy thật lên Vercel để xác nhận** — cần người dùng tự làm
       theo README, đặc biệt kiểm tra:
       - Build trên Vercel thành công (xem tab "Deployments" → log build)
       - Đăng nhập/đăng ký hoạt động (test kỹ AUTH_URL khớp đúng domain
         Vercel cấp, xem NEXTJS_NOTES.md mục 14)
-      - Upload 1 file thật, xác nhận tải xuống lại được (xác nhận R2
-        hoạt động, không phải đang âm thầm dùng fallback lưu cục bộ —
-        Vercel sẽ mất file này sau lần deploy kế tiếp nếu R2 chưa đúng)
+      - Upload 1 file thật, xác nhận tải xuống lại được (xác nhận Vercel
+        Blob hoạt động, không phải đang âm thầm dùng fallback lưu cục bộ —
+        Vercel sẽ mất file này sau lần deploy kế tiếp nếu Blob store chưa
+        được connect vào project đúng cách)
       - Rate limiting đăng nhập sai nhiều lần — chấp nhận có thể không
         chính xác 100% trên Vercel serverless (nhiều instance chạy song
         song không chia sẻ bộ nhớ), xem NEXTJS_NOTES.md mục 17
