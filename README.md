@@ -104,11 +104,16 @@ phí: [Vercel](https://vercel.com) (host code + lưu file) và
 ### 1. Tạo database trên Neon
 
 1. Đăng ký/đăng nhập [neon.tech](https://neon.tech), tạo 1 project mới
-2. Vào project → **Connection string** → chọn nhánh **Pooled connection**
-   (KHÔNG chọn "Direct connection" — pooled mới chịu được nhiều kết nối
-   đồng thời như Vercel serverless tạo ra)
-3. Copy chuỗi dạng `postgresql://...@ep-xxx-pooler.../neondb?sslmode=require`
-   — đây là giá trị `DATABASE_URL` sẽ dùng ở bước 2
+2. Vào project → **Connection string** — lấy **CẢ 2** loại (đổi qua lại
+   bằng nút chọn ngay trên ô connection string):
+   - **Pooled connection** (hostname có `-pooler`) → giá trị `DATABASE_URL`
+   - **Direct connection** (hostname KHÔNG có `-pooler`) → giá trị
+     `DIRECT_URL`
+
+   Cả 2 đều cần — `DATABASE_URL` (pooled) cho app chạy thật,
+   `DIRECT_URL` cho Prisma chạy migration lúc build (pooled connection
+   không hỗ trợ migration, dùng nhầm sẽ làm build lỗi — xem
+   `NEXTJS_NOTES.md` mục 19)
 
 ### 2. Đưa code lên Vercel
 
@@ -120,7 +125,8 @@ phí: [Vercel](https://vercel.com) (host code + lưu file) và
 
    | Biến               | Giá trị                                                                                                              |
    | ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-   | `DATABASE_URL`      | chuỗi Neon lấy ở bước 1                                                                                               |
+   | `DATABASE_URL`      | chuỗi **pooled** lấy ở bước 1                                                                                         |
+   | `DIRECT_URL`        | chuỗi **direct** lấy ở bước 1 (bắt buộc — thiếu là build lỗi ở bước migration)                                       |
    | `AUTH_SECRET`       | chạy `openssl rand -base64 32` (Windows: xem ghi chú dưới)                                                           |
    | `AUTH_URL`          | để tạm `https://ten-project.vercel.app` (Vercel cho biết tên chính xác ngay khi Import xong — sửa lại sau nếu cần)  |
    | `APP_URL`           | giống `AUTH_URL`                                                                                                      |

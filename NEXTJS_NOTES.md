@@ -534,3 +534,54 @@ await del(key); // nhận thẳng pathname, không bắt buộc truyền access
 **Đã kiểm tra không có nơi nào khác gọi `readLocalFile` trực tiếp** (grep
 toàn bộ `src/`) trước khi đổi tên/gộp hàm — chỉ `app/api/files/[...key]/route.ts`
 dùng, an toàn để đổi interface mà không sợ vỡ chỗ khác.
+
+## 19. Bug thật đã sửa: `prisma migrate deploy` lỗi lúc build trên Vercel — pooled connection không hỗ trợ DDL (Giai đoạn 13)
+
+**Triệu chứng người dùng báo:** Vercel báo `Command "npm run vercel-build"
+exited with 1` — build fail.
+
+**Nguyên nhân (xác nhận qua tài liệu chính thức Prisma, không đoán):**
+`DATABASE_URL` trỏ vào connection **pooled** của Neon (qua PgBouncer, chế
+độ transaction) theo đúng hướng dẫn ban đầu của mình (mục 13, bước 1) —
+đúng cho app chạy thật, nhưng PgBouncer chế độ transaction **không hỗ trợ
+DDL** (`CREATE TABLE`/`ALTER TABLE`...) mà lệnh `prisma migrate deploy`
+(chạy trong script `vercel-build`) cần. Đây là vấn đề rất phổ biến,
+Cloudflare/Supabase/Neon đều gặp y hệt khi dùng chung 1 URL pooled cho cả
+runtime lẫn migration.
+
+**Riêng Prisma 7 phức tạp hơn phiên bản cũ:** trước đây chỉ cần thêm dòng
+`directUrl = env("DIRECT_URL")` ngay trong `datasource` block của
+`schema.prisma`. **Prisma 7 đã BỎ HẲN `directUrl`** — xác nhận trực tiếp
+qua type thật trong `node_modules/@prisma/config/dist/index.d.ts`:
+```ts
+export declare type Datasource = {
+    url?: string;
+    shadowDatabaseUrl?: string;
+};
+```
+Không còn `directUrl` ở đây. Cách chính thức thay thế (theo đúng hướng
+dẫn nâng cấp lên v7 của Prisma): **`prisma.config.ts` (dùng bởi Prisma
+CLI — generate/migrate/studio/seed) và `lib/prisma.ts` (dùng bởi
+PrismaClient lúc app chạy thật) giờ đọc 2 biến môi trường HOÀN TOÀN TÁCH
+BIỆT:**
+
+- `prisma.config.ts` → `url: env("DIRECT_URL")` (connection KHÔNG qua
+  pooler — CLI cần DDL)
+- `lib/prisma.ts` → vẫn `process.env.DATABASE_URL` như cũ (connection
+  pooled — app runtime cần chịu tải nhiều kết nối serverless)
+
+**Cách sửa:** thêm biến môi trường mới `DIRECT_URL` (Neon Console gọi là
+"Direct connection", hostname KHÔNG có `-pooler`) — vào cả
+`.env`/`.env.example` (local) lẫn Environment Variables trên Vercel
+dashboard (production). Đổi `prisma.config.ts` đọc biến này thay vì
+`DATABASE_URL`. `lib/prisma.ts` KHÔNG đổi gì — vẫn dùng `DATABASE_URL`
+(pooled) như thiết kế ban đầu.
+
+**Lưu ý phụ:** lúc sửa lại `.env.example`, phát hiện 2 dòng
+`DATABASE_URL`/`AUTH_SECRET` **quay lại giá trị thật đã lộ** (đã sửa 1
+lần ở Giai đoạn 12, mục không nhớ số chính xác — bị mất qua nhiều lần vá
+lỗi/đổi hướng liên tiếp của Giai đoạn 13, có thể do 1 lần `git checkout
+--` hoàn tác nhầm cả phần này). Đã sửa lại lần 2 — CẦN NHẮC người dùng
+XOAY VÒNG (rotate) mật khẩu Postgres thật trên Neon Console lần nữa nếu
+chưa làm, vì giá trị cũ đã nằm trong lịch sử git commit "Giai đoạn 12"
+public trên GitHub một thời gian.

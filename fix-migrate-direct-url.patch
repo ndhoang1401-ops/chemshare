@@ -1,0 +1,148 @@
+diff --git a/.env.example b/.env.example
+index b25efdf..0919453 100644
+--- a/.env.example
++++ b/.env.example
+@@ -12,11 +12,18 @@ APP_URL="http://localhost:3000"
+ # Khớp với docker-compose.dev.yml đi kèm khi chạy Postgres local (Cách A
+ # trong README). Nếu dùng Postgres trên mây (Neon/Supabase — Cách B),
+ # thay toàn bộ giá trị này bằng connection string họ cung cấp.
+-DATABASE_URL="postgresql://neondb_owner:npg_YPftE9suNj2M@ep-mute-star-atefmk63-pooler.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
++DATABASE_URL="postgresql://user:password@ep-your-project-pooler.region.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
++# Dùng cho Prisma CLI (generate/migrate/studio) — xem prisma.config.ts.
++# BẮT BUỘC là connection KHÔNG qua pooler (bỏ "-pooler" khỏi hostname so
++# với DATABASE_URL ở trên) — Neon Console gọi đây là "Direct connection".
++# Thiếu hoặc dùng nhầm URL pooled ở đây làm `prisma migrate deploy` lỗi
++# lúc build trên Vercel (PgBouncer không hỗ trợ DDL). Xem NEXTJS_NOTES.md
++# mục 19.
++DIRECT_URL="postgresql://user:password@ep-your-project.region.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+ 
+ # --- Auth — NextAuth/Auth.js (Giai đoạn 2) ---
+ # Tạo bằng lệnh: openssl rand -base64 32
+-AUTH_SECRET="+0UrYPcby6AgVyGZLj+vetbKVLNWVzLJPCwcrTzG1ZQ="
++AUTH_SECRET="dan-lenh-openssl-rand-base64-32-ben-duoi-de-tao-gia-tri-that"
+ AUTH_URL="http://localhost:3000"
+ 
+ # --- Email — xác thực tài khoản & quên mật khẩu (Giai đoạn 2) ---
+diff --git a/NEXTJS_NOTES.md b/NEXTJS_NOTES.md
+index 3ed7c9d..ba66f40 100644
+--- a/NEXTJS_NOTES.md
++++ b/NEXTJS_NOTES.md
+@@ -534,3 +534,54 @@ await del(key); // nhận thẳng pathname, không bắt buộc truyền access
+ **Đã kiểm tra không có nơi nào khác gọi `readLocalFile` trực tiếp** (grep
+ toàn bộ `src/`) trước khi đổi tên/gộp hàm — chỉ `app/api/files/[...key]/route.ts`
+ dùng, an toàn để đổi interface mà không sợ vỡ chỗ khác.
++
++## 19. Bug thật đã sửa: `prisma migrate deploy` lỗi lúc build trên Vercel — pooled connection không hỗ trợ DDL (Giai đoạn 13)
++
++**Triệu chứng người dùng báo:** Vercel báo `Command "npm run vercel-build"
++exited with 1` — build fail.
++
++**Nguyên nhân (xác nhận qua tài liệu chính thức Prisma, không đoán):**
++`DATABASE_URL` trỏ vào connection **pooled** của Neon (qua PgBouncer, chế
++độ transaction) theo đúng hướng dẫn ban đầu của mình (mục 13, bước 1) —
++đúng cho app chạy thật, nhưng PgBouncer chế độ transaction **không hỗ trợ
++DDL** (`CREATE TABLE`/`ALTER TABLE`...) mà lệnh `prisma migrate deploy`
++(chạy trong script `vercel-build`) cần. Đây là vấn đề rất phổ biến,
++Cloudflare/Supabase/Neon đều gặp y hệt khi dùng chung 1 URL pooled cho cả
++runtime lẫn migration.
++
++**Riêng Prisma 7 phức tạp hơn phiên bản cũ:** trước đây chỉ cần thêm dòng
++`directUrl = env("DIRECT_URL")` ngay trong `datasource` block của
++`schema.prisma`. **Prisma 7 đã BỎ HẲN `directUrl`** — xác nhận trực tiếp
++qua type thật trong `node_modules/@prisma/config/dist/index.d.ts`:
++```ts
++export declare type Datasource = {
++    url?: string;
++    shadowDatabaseUrl?: string;
++};
++```
++Không còn `directUrl` ở đây. Cách chính thức thay thế (theo đúng hướng
++dẫn nâng cấp lên v7 của Prisma): **`prisma.config.ts` (dùng bởi Prisma
++CLI — generate/migrate/studio/seed) và `lib/prisma.ts` (dùng bởi
++PrismaClient lúc app chạy thật) giờ đọc 2 biến môi trường HOÀN TOÀN TÁCH
++BIỆT:**
++
++- `prisma.config.ts` → `url: env("DIRECT_URL")` (connection KHÔNG qua
++  pooler — CLI cần DDL)
++- `lib/prisma.ts` → vẫn `process.env.DATABASE_URL` như cũ (connection
++  pooled — app runtime cần chịu tải nhiều kết nối serverless)
++
++**Cách sửa:** thêm biến môi trường mới `DIRECT_URL` (Neon Console gọi là
++"Direct connection", hostname KHÔNG có `-pooler`) — vào cả
++`.env`/`.env.example` (local) lẫn Environment Variables trên Vercel
++dashboard (production). Đổi `prisma.config.ts` đọc biến này thay vì
++`DATABASE_URL`. `lib/prisma.ts` KHÔNG đổi gì — vẫn dùng `DATABASE_URL`
++(pooled) như thiết kế ban đầu.
++
++**Lưu ý phụ:** lúc sửa lại `.env.example`, phát hiện 2 dòng
++`DATABASE_URL`/`AUTH_SECRET` **quay lại giá trị thật đã lộ** (đã sửa 1
++lần ở Giai đoạn 12, mục không nhớ số chính xác — bị mất qua nhiều lần vá
++lỗi/đổi hướng liên tiếp của Giai đoạn 13, có thể do 1 lần `git checkout
++--` hoàn tác nhầm cả phần này). Đã sửa lại lần 2 — CẦN NHẮC người dùng
++XOAY VÒNG (rotate) mật khẩu Postgres thật trên Neon Console lần nữa nếu
++chưa làm, vì giá trị cũ đã nằm trong lịch sử git commit "Giai đoạn 12"
++public trên GitHub một thời gian.
+diff --git a/README.md b/README.md
+index 9ffffda..808ccde 100644
+--- a/README.md
++++ b/README.md
+@@ -104,11 +104,16 @@ phí: [Vercel](https://vercel.com) (host code + lưu file) và
+ ### 1. Tạo database trên Neon
+ 
+ 1. Đăng ký/đăng nhập [neon.tech](https://neon.tech), tạo 1 project mới
+-2. Vào project → **Connection string** → chọn nhánh **Pooled connection**
+-   (KHÔNG chọn "Direct connection" — pooled mới chịu được nhiều kết nối
+-   đồng thời như Vercel serverless tạo ra)
+-3. Copy chuỗi dạng `postgresql://...@ep-xxx-pooler.../neondb?sslmode=require`
+-   — đây là giá trị `DATABASE_URL` sẽ dùng ở bước 2
++2. Vào project → **Connection string** — lấy **CẢ 2** loại (đổi qua lại
++   bằng nút chọn ngay trên ô connection string):
++   - **Pooled connection** (hostname có `-pooler`) → giá trị `DATABASE_URL`
++   - **Direct connection** (hostname KHÔNG có `-pooler`) → giá trị
++     `DIRECT_URL`
++
++   Cả 2 đều cần — `DATABASE_URL` (pooled) cho app chạy thật,
++   `DIRECT_URL` cho Prisma chạy migration lúc build (pooled connection
++   không hỗ trợ migration, dùng nhầm sẽ làm build lỗi — xem
++   `NEXTJS_NOTES.md` mục 19)
+ 
+ ### 2. Đưa code lên Vercel
+ 
+@@ -120,7 +125,8 @@ phí: [Vercel](https://vercel.com) (host code + lưu file) và
+ 
+    | Biến               | Giá trị                                                                                                              |
+    | ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+-   | `DATABASE_URL`      | chuỗi Neon lấy ở bước 1                                                                                               |
++   | `DATABASE_URL`      | chuỗi **pooled** lấy ở bước 1                                                                                         |
++   | `DIRECT_URL`        | chuỗi **direct** lấy ở bước 1 (bắt buộc — thiếu là build lỗi ở bước migration)                                       |
+    | `AUTH_SECRET`       | chạy `openssl rand -base64 32` (Windows: xem ghi chú dưới)                                                           |
+    | `AUTH_URL`          | để tạm `https://ten-project.vercel.app` (Vercel cho biết tên chính xác ngay khi Import xong — sửa lại sau nếu cần)  |
+    | `APP_URL`           | giống `AUTH_URL`                                                                                                      |
+diff --git a/prisma.config.ts b/prisma.config.ts
+index c9d2548..ea511fc 100644
+--- a/prisma.config.ts
++++ b/prisma.config.ts
+@@ -2,13 +2,22 @@
+ // giờ Prisma CLI (generate/migrate/studio/seed) đọc connection string và
+ // cấu hình migration từ file này thay vì từ schema. Xem NEXTJS_NOTES.md
+ // mục "Prisma 7" để biết chi tiết vì sao có file này.
++//
++// QUAN TRỌNG: dùng DIRECT_URL (không qua pooler PgBouncer của Neon) ở
++// đây, KHÁC với DATABASE_URL (pooled) mà lib/prisma.ts dùng cho app chạy
++// thật. PgBouncer chế độ transaction (Neon dùng mặc định) không hỗ trợ
++// DDL (CREATE TABLE/ALTER TABLE...) mà `prisma migrate deploy` cần —
++// dùng nhầm URL pooled ở đây làm lệnh migrate lỗi/treo khi build trên
++// Vercel. Đã xác nhận qua tài liệu chính thức Prisma (hướng dẫn nâng cấp
++// lên v7: "pass the directUrl value in the url field of prisma.config.ts
++// instead"). Xem NEXTJS_NOTES.md mục 19.
+ import "dotenv/config";
+ import { defineConfig, env } from "prisma/config";
+ 
+ export default defineConfig({
+   schema: "prisma/schema.prisma",
+   datasource: {
+-    url: env("DATABASE_URL"),
++    url: env("DIRECT_URL"),
+   },
+   migrations: {
+     path: "prisma/migrations",
