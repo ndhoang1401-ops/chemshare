@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 
 const HEIGHT_CLASSES = {
   sm: "h-12",
-  md: "h-16",
-  lg: "h-18",
+  md: "h-14",
+  lg: "h-16",
 } as const;
 
 // Kích thước pixel THẬT của từng file ảnh (khác tỉ lệ đôi chút giữa 2
